@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  password  String?
+  plan      Plan     @default(FREE)
+  stripeId  String?  @unique
+  brands    Brand[]
+  accounts  Account[]
+  sessions  Session[]
+  createdAt DateTime @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Brand {
+  id          String       @id @default(cuid())
+  name        String
+  domain      String?
+  keywords    String       @default("[]") // JSON array of strings
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  scans       Scan[]
+  competitors Competitor[]
+  createdAt   DateTime     @default(now())
+}
+
+model Competitor {
+  id      String @id @default(cuid())
+  name    String
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id])
+}
+
+model Scan {
+  id          String       @id @default(cuid())
+  brandId     String
+  brand       Brand        @relation(fields: [brandId], references: [id])
+  query       String
+  results     ScanResult[]
+  globalScore Int          @default(0)
+  createdAt   DateTime     @default(now())
+}
+
+model ScanResult {
+  id          String    @id @default(cuid())
+  scanId      String
+  scan        Scan      @relation(fields: [scanId], references: [id])
+  llm         LLM
+  mentioned   Boolean
+  position    Int?
+  context     String?
+  sentiment   Sentiment?
+  competitors String    @default("[]") // JSON array of strings
+  rawResponse String
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  AGENCY
+}
+
+enum LLM {
+  CHATGPT
+  CLAUDE
+  PERPLEXITY
+  GEMINI
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
