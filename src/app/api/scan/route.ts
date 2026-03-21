@@ -1,6 +1,9 @@
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { scanBrand } from '@/lib/scanner'
+import { calculateGlobalScore } from '@/lib/analysis'
 
 const scanSchema = z.object({
   brandId: z.string(),
@@ -9,7 +12,7 @@ const scanSchema = z.object({
 
 export async function POST(req: Request) {
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   }
 
@@ -19,6 +22,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // Scanner implementation in Phase 2
-  return NextResponse.json({ message: 'Scanner — Phase 2' }, { status: 501 })
+  const { brandId, query } = parsed.data
+
+  const brand = await prisma.brand.findFirst({
+    where: { id: brandId, userId: session.user.id },
+  })
+  if (!brand) {
+    return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
+  }
+
+  const results = await scanBrand(brand.name, query)
+  if (results.length === 0) {
+    return NextResponse.json(
+      { error: 'Aucun LLM disponible. Vérifiez vos clés API.' },
+      { status: 503 }
+    )
+  }
+
+  const globalScore = calculateGlobalScore(results)
+
+  const scan = await prisma.scan.create({
+    data: {
+      brandId,
+      query,
+      globalScore,
+      results: {
+        create: results.map((r) => ({
+          llm: r.llm,
+          mentioned: r.mentioned,
+          position: r.position,
+          context: r.context,
+          sentiment: r.sentiment,
+          competitors: JSON.stringify(r.competitors),
+          rawResponse: r.rawResponse,
+        })),
+      },
+    },
+    include: { results: true },
+  })
+
+  return NextResponse.json({ scan })
 }
