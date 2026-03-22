@@ -15,12 +15,31 @@ export default async function CompetitorsPage() {
 
   if (brands.length === 0) {
     return (
-      <div className="p-6 lg:p-8">
-        <h1 className="text-2xl font-bold mb-2">Analyse concurrents</h1>
-        <p className="text-muted-foreground">
-          <Link href="/settings" className="text-primary hover:underline">Ajoutez une marque</Link>{' '}
-          pour voir les concurrents détectés.
-        </p>
+      <div className="p-6 lg:p-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Analyse concurrents</h1>
+          <p className="text-muted-foreground">Qui l&apos;IA recommande à votre place</p>
+        </div>
+        <div className="card-glow rounded-xl bg-card border border-border p-12 text-center">
+          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="h-7 w-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold mb-2">Aucune donnée concurrentielle</h2>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+            Lancez des scans pour découvrir quelles marques l&apos;IA recommande à la place de la vôtre.
+          </p>
+          <Link
+            href="/scans"
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-medium px-4 py-2 transition-colors hover:bg-primary/90 gap-2"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Lancer un scan
+          </Link>
+        </div>
       </div>
     )
   }
@@ -80,9 +99,15 @@ export default async function CompetitorsPage() {
       {topGlobal.length === 0 ? (
         <div className="card-glow rounded-xl bg-card border border-border p-12 text-center">
           <p className="text-muted-foreground mb-2">Aucun concurrent détecté pour l&apos;instant.</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-6">
             Lancez des scans pour découvrir qui est mentionné à la place de {brand.name}.
           </p>
+          <Link
+            href="/scans"
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-medium px-4 py-2 transition-colors hover:bg-primary/90"
+          >
+            Lancer un scan
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

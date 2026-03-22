@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,36 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Inline scan state
+  const [scanBrandId, setScanBrandId] = useState<string | null>(null)
+  const [scanQuery, setScanQuery] = useState('')
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState('')
+
+  async function handleQuickScan(e: React.FormEvent, brandId: string) {
+    e.preventDefault()
+    if (!scanQuery.trim()) return
+    setScanError('')
+    setScanLoading(true)
+    try {
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, query: scanQuery.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setScanError(data.error || 'Erreur lors du scan.')
+        setScanLoading(false)
+        return
+      }
+      router.push(`/scans/${data.scan.id}`)
+    } catch {
+      setScanError('Une erreur est survenue.')
+      setScanLoading(false)
+    }
+  }
 
   // Form state
   const [name, setName] = useState('')
@@ -257,50 +287,104 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
           {brands.map((brand) => (
             <div
               key={brand.id}
-              className="card-glow rounded-xl border border-border bg-card p-5 flex items-start justify-between gap-4"
+              className="card-glow rounded-xl border border-border bg-card p-5 space-y-0"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold">{brand.name}</p>
-                  {brand.domain && (
-                    <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
-                      {brand.domain}
-                    </span>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-semibold">{brand.name}</p>
+                    {brand.domain && (
+                      <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                        {brand.domain}
+                      </span>
+                    )}
+                  </div>
+                  {brand.keywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {brand.keywords.map((kw) => (
+                        <Badge key={kw} className="bg-secondary text-muted-foreground text-xs border border-border">
+                          {kw}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Aucune requête configurée
+                    </p>
                   )}
                 </div>
-                {brand.keywords.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {brand.keywords.map((kw) => (
-                      <Badge key={kw} className="bg-secondary text-muted-foreground text-xs border border-border">
-                        {kw}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Aucune requête configurée
-                  </p>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant={scanBrandId === brand.id ? 'default' : 'outline'}
+                    onClick={() => {
+                      setScanBrandId(scanBrandId === brand.id ? null : brand.id)
+                      setScanQuery(brand.keywords[0] ?? '')
+                      setScanError('')
+                    }}
+                    className="h-8 px-2.5 text-xs gap-1.5"
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    Scanner
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openEdit(brand)}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(brand.id)}
+                    disabled={loading}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => openEdit(brand)}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+
+              {/* Inline scan form */}
+              {scanBrandId === brand.id && (
+                <form
+                  onSubmit={(e) => handleQuickScan(e, brand.id)}
+                  className="mt-4 pt-4 border-t border-border flex gap-2 items-start flex-wrap"
                 >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(brand.id)}
-                  disabled={loading}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+                  {scanError && (
+                    <p className="w-full text-xs text-destructive">{scanError}</p>
+                  )}
+                  <Input
+                    value={scanQuery}
+                    onChange={(e) => setScanQuery(e.target.value)}
+                    placeholder="Ex: meilleur logiciel CRM PME"
+                    disabled={scanLoading}
+                    className="flex-1 min-w-0 h-8 text-sm"
+                    required
+                  />
+                  <Button type="submit" size="sm" disabled={scanLoading || !scanQuery.trim()} className="h-8 gap-1.5">
+                    {scanLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                    {scanLoading ? 'Scan...' : 'Scanner'}
+                  </Button>
+                  {brand.keywords.length > 0 && (
+                    <div className="w-full flex flex-wrap gap-1 mt-1">
+                      {brand.keywords.slice(0, 5).map((kw) => (
+                        <button
+                          key={kw}
+                          type="button"
+                          onClick={() => setScanQuery(kw)}
+                          disabled={scanLoading}
+                          className="text-xs bg-secondary border border-border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                        >
+                          {kw}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </form>
+              )}
             </div>
           ))}
         </div>

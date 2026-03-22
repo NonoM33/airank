@@ -3,7 +3,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import Link from 'next/link'
 import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
-import { TrendingUp, TrendingDown, Minus, Plus, ArrowRight } from 'lucide-react'
+import { DashboardOnboarding } from '@/components/dashboard/DashboardOnboarding'
+import { NewScanForm } from '@/components/dashboard/NewScanForm'
+import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Suspense } from 'react'
@@ -62,39 +64,61 @@ export default async function DashboardPage() {
   const session = await auth()
   const userId = session!.user.id
 
-  const brands = await prisma.brand.findMany({
+  const allBrands = await prisma.brand.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    take: 1,
   })
 
-  if (brands.length === 0) {
+  if (allBrands.length === 0) {
     return (
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="p-6 lg:p-8 space-y-8">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Bienvenue sur AIRank</p>
         </div>
-        <div className="card-glow rounded-xl bg-card border border-border p-12 text-center">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Plus className="h-8 w-8 text-primary" />
+
+        {/* Teaser score cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="col-span-2 sm:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center opacity-30">
+            <p className="text-5xl font-bold font-mono text-muted-foreground">—</p>
+            <p className="text-muted-foreground text-xs mt-1">Score global</p>
           </div>
-          <h2 className="text-xl font-bold mb-2">Ajoutez votre première marque</h2>
-          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            Commencez par ajouter la marque que vous souhaitez analyser dans les LLMs.
-          </p>
-          <Link
-            href="/settings"
-            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-medium px-4 py-2 transition-colors hover:bg-primary/90"
-          >
-            Ajouter une marque
-          </Link>
+          {['ChatGPT', 'Claude', 'Perplexity', 'Gemini'].map((llm) => (
+            <div key={llm} className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col items-center justify-center text-center opacity-30">
+              <p className="text-xs text-muted-foreground font-medium mb-2">{llm}</p>
+              <p className="text-2xl font-bold font-mono text-muted-foreground">—</p>
+              <p className="text-xs text-muted-foreground mt-0.5">/ 100</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Onboarding card */}
+        <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Zap className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Scannez votre première marque</h2>
+                <p className="text-sm text-muted-foreground">
+                  Découvrez en 20 secondes si l&apos;IA recommande votre marque
+                </p>
+              </div>
+            </div>
+            <DashboardOnboarding />
+          </div>
         </div>
       </div>
     )
   }
 
-  const brand = brands[0]
+  const brand = allBrands[0]
+  const brandsForForm = allBrands.map((b) => ({
+    id: b.id,
+    name: b.name,
+    keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
+  }))
 
   const [latestScan, prevScan, chartScans, recentScans, allResults] = await Promise.all([
     prisma.scan.findFirst({
@@ -133,13 +157,11 @@ export default async function DashboardPage() {
   const chartData = computeChartData(chartScans)
   const scoreInfo = getScoreLabel(globalScore)
 
-  // LLM breakdown
   const llmScores = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'].map((llm) => {
     const result = latestScan?.results.find((r) => r.llm === llm)
     return { llm, score: result ? getLLMScore(result) : null, mentioned: result?.mentioned ?? false }
   })
 
-  // Competitor ranking
   const competitorMap = new Map<string, number>()
   for (const row of allResults) {
     try {
@@ -156,7 +178,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
@@ -164,17 +186,11 @@ export default async function DashboardPage() {
             <span className="text-foreground font-medium">{brand.name}</span>
           </p>
         </div>
-        <Link
-          href="/scans"
-          className="inline-flex items-center justify-center rounded-lg border border-border bg-background text-sm font-medium px-3 py-1.5 transition-colors hover:bg-muted"
-        >
-          Voir tous les scans
-        </Link>
+        <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
       </div>
 
       {/* Score + LLM cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Global score */}
         <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center">
           <Badge className={`text-xs mb-3 ${scoreInfo.color}`}>{scoreInfo.label}</Badge>
           <p className={`text-6xl font-bold font-mono leading-none ${getScoreColor(globalScore)}`}>
@@ -182,11 +198,7 @@ export default async function DashboardPage() {
           </p>
           <p className="text-muted-foreground text-sm mt-1">/ 100</p>
           {trend !== 0 ? (
-            <div
-              className={`flex items-center gap-1 mt-3 text-sm font-medium ${
-                trend > 0 ? 'text-green-400' : 'text-red-400'
-              }`}
-            >
+            <div className={`flex items-center gap-1 mt-3 text-sm font-medium ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
               {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               {trend > 0 ? '+' : ''}{trend} pts
             </div>
@@ -197,7 +209,6 @@ export default async function DashboardPage() {
           ) : null}
         </div>
 
-        {/* LLM cards */}
         {llmScores.map(({ llm, score, mentioned }) => (
           <div
             key={llm}
@@ -211,13 +222,7 @@ export default async function DashboardPage() {
             )}
             <p className="text-xs text-muted-foreground mt-0.5">/ 100</p>
             {score !== null && (
-              <Badge
-                className={`text-[10px] mt-2 ${
-                  mentioned
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-red-500/20 text-red-400'
-                }`}
-              >
+              <Badge className={`text-[10px] mt-2 ${mentioned ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                 {mentioned ? '✓ Mentionné' : '✗ Absent'}
               </Badge>
             )}
@@ -225,34 +230,40 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      {/* No scans yet — show big CTA */}
+      {recentScans.length === 0 && (
+        <div className="card-glow rounded-xl bg-card border border-primary/20 p-8 text-center">
+          <p className="text-muted-foreground mb-1">Aucune analyse pour le moment.</p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Lancez votre premier scan pour voir vos scores LLM.
+          </p>
+          <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} startOpen />
+        </div>
+      )}
+
       {/* Evolution chart */}
-      <div className="card-glow rounded-xl bg-card border border-border p-6">
-        <h2 className="text-base font-semibold mb-4">Évolution sur 30 jours</h2>
-        <Suspense fallback={<Skeleton className="h-[220px] w-full" />}>
-          <EvolutionChart data={chartData} />
-        </Suspense>
-      </div>
+      {chartData.length > 0 && (
+        <div className="card-glow rounded-xl bg-card border border-border p-6">
+          <h2 className="text-base font-semibold mb-4">Évolution sur 30 jours</h2>
+          <Suspense fallback={<Skeleton className="h-[220px] w-full" />}>
+            <EvolutionChart data={chartData} />
+          </Suspense>
+        </div>
+      )}
 
       {/* Recent scans + Competitors */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent scans */}
-        <div className="card-glow rounded-xl bg-card border border-border">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-base font-semibold">Dernières analyses</h2>
-            <Link
-              href="/scans"
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-            >
-              Tout voir <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {recentScans.length === 0 ? (
-              <div className="px-6 py-8 text-center text-muted-foreground text-sm">
-                Aucun scan pour le moment
-              </div>
-            ) : (
-              recentScans.map((scan) => {
+      {recentScans.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent scans */}
+          <div className="card-glow rounded-xl bg-card border border-border">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Dernières analyses</h2>
+              <Link href="/scans" className="text-xs text-primary hover:underline flex items-center gap-1">
+                Tout voir <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-border">
+              {recentScans.map((scan) => {
                 const mentionCount = scan.results.filter((r) => r.mentioned).length
                 return (
                   <Link
@@ -264,11 +275,8 @@ export default async function DashboardPage() {
                       <p className="text-sm font-medium truncate">{scan.query}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {scan.createdAt.toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
+                          day: '2-digit', month: '2-digit', year: '2-digit',
+                          hour: '2-digit', minute: '2-digit',
                         })}
                       </p>
                     </div>
@@ -282,45 +290,43 @@ export default async function DashboardPage() {
                     </div>
                   </Link>
                 )
-              })
-            )}
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Competitor ranking */}
-        <div className="card-glow rounded-xl bg-card border border-border">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="text-base font-semibold">Concurrents détectés par l&apos;IA</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            {topCompetitors.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Les concurrents apparaîtront ici après vos premiers scans
-              </p>
-            ) : (
-              topCompetitors.map(([name, count], idx) => (
-                <div key={name} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-xs w-4">
-                        #{idx + 1}
+          {/* Competitor ranking */}
+          <div className="card-glow rounded-xl bg-card border border-border">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Concurrents détectés par l&apos;IA</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              {topCompetitors.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Les concurrents apparaîtront ici après vos premiers scans
+                </p>
+              ) : (
+                topCompetitors.map(([name, count], idx) => (
+                  <div key={name} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-mono text-xs w-4">#{idx + 1}</span>
+                        <span className="font-medium">{name}</span>
                       </span>
-                      <span className="font-medium">{name}</span>
-                    </span>
-                    <span className="text-muted-foreground text-xs">{count} mention{count > 1 ? 's' : ''}</span>
+                      <span className="text-muted-foreground text-xs">{count} mention{count > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary/60 rounded-full transition-all"
+                        style={{ width: `${(count / maxCount) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary/60 rounded-full transition-all"
-                      style={{ width: `${(count / maxCount) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

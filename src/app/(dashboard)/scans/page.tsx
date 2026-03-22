@@ -3,12 +3,19 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, Plus } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { NewScanForm } from '@/components/dashboard/NewScanForm'
 
 function getScoreColor(score: number) {
   if (score >= 70) return 'text-green-400'
   if (score >= 40) return 'text-amber-400'
   return 'text-red-400'
+}
+
+function getScoreBg(score: number) {
+  if (score >= 70) return 'bg-green-500/10 border-green-500/20'
+  if (score >= 40) return 'bg-amber-500/10 border-amber-500/20'
+  return 'bg-red-500/10 border-red-500/20'
 }
 
 const LLM_ICONS: Record<string, string> = {
@@ -25,17 +32,28 @@ export default async function ScansPage() {
   const brands = await prisma.brand.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    take: 1,
   })
+
+  const brandsForForm = brands.map((b) => ({
+    id: b.id,
+    name: b.name,
+    keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
+  }))
 
   if (brands.length === 0) {
     return (
-      <div className="p-6 lg:p-8">
-        <h1 className="text-2xl font-bold mb-2">Scans</h1>
-        <p className="text-muted-foreground mb-6">
-          <Link href="/settings" className="text-primary hover:underline">Ajoutez une marque</Link>{' '}
-          pour commencer à scanner.
-        </p>
+      <div className="p-6 lg:p-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Scans</h1>
+          <p className="text-muted-foreground">Historique de vos analyses LLM</p>
+        </div>
+        <div className="card-glow rounded-xl bg-card border border-primary/20 p-10 text-center">
+          <p className="text-muted-foreground mb-2">Aucune marque configurée.</p>
+          <p className="text-sm text-muted-foreground mb-6">
+            Commencez par ajouter une marque dans les{' '}
+            <Link href="/settings" className="text-primary hover:underline">paramètres</Link>.
+          </p>
+        </div>
       </div>
     )
   }
@@ -54,7 +72,7 @@ export default async function ScansPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Scans</h1>
           <p className="text-muted-foreground">
@@ -62,22 +80,16 @@ export default async function ScansPage() {
             <span className="text-foreground font-medium">{brand.name}</span>
           </p>
         </div>
-        <Link
-          href="/settings"
-          className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-medium px-3 py-1.5 transition-colors hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Nouveau scan
-        </Link>
+        <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
       </div>
 
+      {/* Inline scan form shown immediately when no scans yet */}
       {scans.length === 0 ? (
-        <div className="card-glow rounded-xl bg-card border border-border p-12 text-center">
-          <p className="text-muted-foreground mb-4">Aucun scan pour le moment.</p>
-          <p className="text-sm text-muted-foreground">
-            Lancez votre premier scan depuis la page{' '}
-            <Link href="/settings" className="text-primary hover:underline">Paramètres</Link>.
+        <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
+          <p className="text-sm text-muted-foreground mb-6 text-center">
+            Aucun scan pour le moment. Lancez votre première analyse !
           </p>
+          <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} startOpen />
         </div>
       ) : (
         <div className="card-glow rounded-xl bg-card border border-border overflow-hidden">
@@ -104,18 +116,20 @@ export default async function ScansPage() {
                 {scans.map((scan) => {
                   const mentionCount = scan.results.filter((r) => r.mentioned).length
                   return (
-                    <tr key={scan.id} className="hover:bg-secondary/30 transition-colors">
+                    <tr key={scan.id} className="hover:bg-secondary/30 transition-colors group">
                       <td className="px-6 py-4">
                         <p className="text-sm font-medium max-w-xs truncate">{scan.query}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
+                          {scan.createdAt.toLocaleDateString('fr-FR', {
+                            day: '2-digit', month: '2-digit', year: '2-digit',
+                          })}
+                        </p>
                       </td>
                       <td className="px-4 py-4 hidden sm:table-cell">
                         <p className="text-sm text-muted-foreground whitespace-nowrap">
                           {scan.createdAt.toLocaleDateString('fr-FR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                            day: '2-digit', month: '2-digit', year: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
                           })}
                         </p>
                       </td>
@@ -139,7 +153,7 @@ export default async function ScansPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className={`font-mono font-bold ${getScoreColor(scan.globalScore)}`}>
+                        <span className={`font-mono font-bold text-sm ${getScoreColor(scan.globalScore)}`}>
                           {scan.globalScore}
                         </span>
                       </td>
