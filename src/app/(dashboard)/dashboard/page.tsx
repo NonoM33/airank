@@ -6,7 +6,7 @@ import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
 import { DashboardOnboarding } from '@/components/dashboard/DashboardOnboarding'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
 import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
-import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap, Settings } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Suspense } from 'react'
@@ -78,24 +78,26 @@ export default async function DashboardPage() {
 
   if (allBrands.length === 0) {
     return (
-      <div className="p-6 lg:p-8 space-y-8">
+      <div className="p-4 lg:p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Bienvenue sur AIRank</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <div className="col-span-2 sm:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center opacity-30">
+
+        {/* Ghost score cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center opacity-25">
             <p className="text-5xl font-bold font-mono text-muted-foreground">—</p>
             <p className="text-muted-foreground text-xs mt-1">Score global</p>
           </div>
           {['ChatGPT', 'Claude', 'Perplexity', 'Gemini'].map((llm) => (
-            <div key={llm} className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col items-center justify-center text-center opacity-30">
+            <div key={llm} className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col items-center justify-center text-center opacity-25">
               <p className="text-xs text-muted-foreground font-medium mb-2">{llm}</p>
               <p className="text-2xl font-bold font-mono text-muted-foreground">—</p>
-              <p className="text-xs text-muted-foreground mt-0.5">/ 100</p>
             </div>
           ))}
         </div>
+
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
           <div className="max-w-2xl">
             <div className="flex items-center gap-3 mb-5">
@@ -154,20 +156,21 @@ export default async function DashboardPage() {
     )
 
     return (
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="p-4 lg:p-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">
-              Visibilité IA de vos{' '}
-              <span className="text-foreground font-medium">{allBrands.length} marques</span>
+              <span className="text-foreground font-medium">{allBrands.length} marques</span>{' '}
+              surveillées
             </p>
           </div>
           <Link
             href="/settings"
             className="inline-flex items-center gap-1.5 text-sm border border-border rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
           >
-            Gérer les marques
+            <Settings className="h-4 w-4" />
+            Gérer
           </Link>
         </div>
 
@@ -181,9 +184,11 @@ export default async function DashboardPage() {
               if (!r) return { llm, status: 'no-scan' as const }
               return { llm, status: r.mentioned ? ('mentioned' as const) : ('not-mentioned' as const) }
             })
+            const mentionedCount = llmStatuses.filter((s) => s.status === 'mentioned').length
 
             return (
-              <div key={brand.id} className="card-glow rounded-xl bg-card border border-border p-5 flex flex-col gap-4">
+              <div key={brand.id} className="card-glow rounded-xl bg-card border border-border p-5 flex flex-col gap-4 hover:border-primary/30 transition-colors">
+                {/* Brand header */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-bold truncate">{brand.name}</p>
@@ -196,14 +201,15 @@ export default async function DashboardPage() {
                   )}
                 </div>
 
+                {/* Score + LLM dots */}
                 <div className="flex items-center gap-4">
-                  <div className="text-center shrink-0">
+                  <div className="shrink-0 text-center">
                     <p className={`text-5xl font-bold font-mono leading-none ${score !== null ? getScoreColor(score) : 'text-muted-foreground'}`}>
                       {score !== null ? score : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">/ 100</p>
                   </div>
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-3">
                       {llmStatuses.map(({ llm, status }) => (
                         <div key={llm} className="flex flex-col items-center gap-1">
@@ -218,7 +224,7 @@ export default async function DashboardPage() {
                     </div>
                     {latestScan ? (
                       <p className="text-xs text-muted-foreground">
-                        {latestScan.createdAt.toLocaleDateString('fr-FR', {
+                        {mentionedCount}/4 LLMs · {latestScan.createdAt.toLocaleDateString('fr-FR', {
                           day: '2-digit', month: '2-digit', year: '2-digit',
                         })}
                       </p>
@@ -330,7 +336,9 @@ export default async function DashboardPage() {
   const maxCount = topCompetitors[0]?.[1] ?? 1
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 lg:p-6 space-y-5">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -342,55 +350,70 @@ export default async function DashboardPage() {
         <div className="flex items-center gap-2">
           <Link
             href={`/brands/${brand.id}`}
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-2 hover:border-primary/50 transition-colors"
+            className="hidden sm:inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-2 hover:border-primary/50 transition-colors"
           >
-            Analyse détaillée <ArrowRight className="h-3.5 w-3.5" />
+            Analyse complète <ArrowRight className="h-3.5 w-3.5" />
           </Link>
           <DashboardScanButton brand={brandsForForm[0]} />
         </div>
       </div>
 
-      {/* Score + LLM cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center">
-          <Badge className={`text-xs mb-3 ${scoreInfo.color}`}>{scoreInfo.label}</Badge>
-          <p className={`text-6xl font-bold font-mono leading-none ${getScoreColor(globalScore)}`}>
+      {/* ── Row 1: 5 score cards in one row ────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+
+        {/* Global score */}
+        <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-5 flex flex-col">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <Badge className={`text-xs ${scoreInfo.color}`}>{scoreInfo.label}</Badge>
+            {trend !== 0 ? (
+              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg shrink-0 ${
+                trend > 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+              }`}>
+                {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {trend > 0 ? '+' : ''}{trend}
+              </div>
+            ) : latestScan ? (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground px-2 py-1 rounded-lg bg-secondary shrink-0">
+                <Minus className="h-3 w-3" /> Stable
+              </div>
+            ) : null}
+          </div>
+          <p className={`text-5xl font-bold font-mono leading-none mt-auto ${getScoreColor(globalScore)}`}>
             {globalScore}
           </p>
-          <p className="text-muted-foreground text-sm mt-1">/ 100</p>
-          {trend !== 0 ? (
-            <div className={`flex items-center gap-1 mt-3 text-sm font-medium ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              {trend > 0 ? '+' : ''}{trend} pts
-            </div>
-          ) : latestScan ? (
-            <div className="flex items-center gap-1 mt-3 text-sm text-muted-foreground">
-              <Minus className="h-3 w-3" /> Stable
-            </div>
-          ) : null}
+          <p className="text-xs text-muted-foreground mt-1">/ 100 · Score global</p>
+          {latestScan && (
+            <p className="text-[10px] text-muted-foreground mt-3 pt-3 border-t border-border">
+              {latestScan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+            </p>
+          )}
         </div>
 
+        {/* 4 LLM cards */}
         {llmScores.map(({ llm, score, mentioned }) => (
           <div
             key={llm}
-            className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col items-center justify-center text-center"
+            className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col"
           >
-            <p className="text-xs text-muted-foreground font-medium mb-2">{LLM_LABELS[llm]}</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground font-medium">{LLM_LABELS[llm]}</p>
+              {score !== null && (
+                <Badge className={`text-[10px] ${mentioned ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {mentioned ? '✓' : '✗'}
+                </Badge>
+              )}
+            </div>
             {score === null ? (
-              <p className="text-2xl font-bold font-mono text-muted-foreground">—</p>
+              <p className="text-2xl font-bold font-mono text-muted-foreground mt-auto">—</p>
             ) : (
-              <p className={`text-3xl font-bold font-mono ${getScoreColor(score)}`}>{score}</p>
+              <p className={`text-2xl font-bold font-mono mt-auto ${getScoreColor(score)}`}>{score}</p>
             )}
             <p className="text-xs text-muted-foreground mt-0.5">/ 100</p>
-            {score !== null && (
-              <Badge className={`text-[10px] mt-2 ${mentioned ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                {mentioned ? '✓ Mentionné' : '✗ Absent'}
-              </Badge>
-            )}
           </div>
         ))}
       </div>
 
+      {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {recentScans.length === 0 && (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8 text-center">
           <p className="text-muted-foreground mb-1">Aucune analyse pour le moment.</p>
@@ -401,20 +424,42 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* ── Row 2: Chart (2/3) + sidebar (1/3) ─────────────────────────────── */}
       {chartData.length > 0 && (
-        <div className="card-glow rounded-xl bg-card border border-border p-6">
-          <h2 className="text-base font-semibold mb-4">Évolution sur 30 jours</h2>
-          <Suspense fallback={<Skeleton className="h-[220px] w-full" />}>
-            <EvolutionChart data={chartData} />
-          </Suspense>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 card-glow rounded-xl bg-card border border-border p-5">
+            <h2 className="text-sm font-semibold mb-4">Évolution sur 30 jours</h2>
+            <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
+              <EvolutionChart data={chartData} />
+            </Suspense>
+          </div>
+          <div className="flex flex-col gap-4">
+            <div className="card-glow rounded-xl bg-card border border-border p-5">
+              <h3 className="text-sm font-semibold mb-3">Nouveau scan</h3>
+              <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
+            </div>
+            <Link
+              href={`/brands/${brand.id}`}
+              className="card-glow rounded-xl bg-card border border-border p-4 flex items-center justify-between gap-2 hover:border-primary/50 transition-colors group"
+            >
+              <div>
+                <p className="text-sm font-semibold">Analyse complète</p>
+                <p className="text-xs text-muted-foreground">{brand.name} · détails &amp; recommandations</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0" />
+            </Link>
+          </div>
         </div>
       )}
 
+      {/* ── Recent scans + Competitors ──────────────────────────────────────── */}
       {recentScans.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="card-glow rounded-xl bg-card border border-border">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-base font-semibold">Dernières analyses</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Recent scans */}
+          <div className="card-glow rounded-xl bg-card border border-border overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <h2 className="text-sm font-semibold">Dernières analyses</h2>
               <Link href="/scans" className="text-xs text-primary hover:underline flex items-center gap-1">
                 Tout voir <ArrowRight className="h-3 w-3" />
               </Link>
@@ -426,19 +471,18 @@ export default async function DashboardPage() {
                   <Link
                     key={scan.id}
                     href={`/scans/${scan.id}`}
-                    className="flex items-center justify-between px-6 py-3 hover:bg-secondary/50 transition-colors"
+                    className="flex items-center justify-between px-5 py-3 hover:bg-secondary/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{scan.query}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {scan.createdAt.toLocaleDateString('fr-FR', {
                           day: '2-digit', month: '2-digit', year: '2-digit',
-                          hour: '2-digit', minute: '2-digit',
                         })}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 ml-4 shrink-0">
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 ml-3 shrink-0">
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
                         {mentionCount}/{scan.results.length} LLMs
                       </span>
                       <span className={`font-mono font-bold text-sm ${getScoreColor(scan.globalScore)}`}>
@@ -451,14 +495,15 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="card-glow rounded-xl bg-card border border-border">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="text-base font-semibold">Concurrents détectés par l&apos;IA</h2>
+          {/* Competitors */}
+          <div className="card-glow rounded-xl bg-card border border-border overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border">
+              <h2 className="text-sm font-semibold">Concurrents détectés par l&apos;IA</h2>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-3.5">
               {topCompetitors.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Les concurrents apparaîtront ici après vos premiers scans
+                  Les concurrents apparaîtront après vos premiers scans
                 </p>
               ) : (
                 topCompetitors.map(([name, count], idx) => (

@@ -18,11 +18,24 @@ export async function GET() {
 
   const brands = await prisma.brand.findMany({
     where: { userId: session.user.id },
-    include: { competitors: true },
+    include: {
+      competitors: true,
+      scans: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { globalScore: true, createdAt: true },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   })
 
-  return NextResponse.json(brands)
+  const result = brands.map(({ scans, ...brand }) => ({
+    ...brand,
+    lastScore: scans[0]?.globalScore ?? null,
+    lastScanAt: scans[0]?.createdAt ?? null,
+  }))
+
+  return NextResponse.json(result)
 }
 
 export async function POST(req: Request) {

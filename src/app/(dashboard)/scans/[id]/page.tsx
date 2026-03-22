@@ -50,65 +50,54 @@ function getLLMCardBorder(score: number) {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LLM_LABELS: Record<string, { name: string; icon: string }> = {
-  CHATGPT:   { name: 'ChatGPT',   icon: '🤖' },
-  CLAUDE:    { name: 'Claude',    icon: '🟠' },
-  PERPLEXITY:{ name: 'Perplexity',icon: '🔵' },
-  GEMINI:    { name: 'Gemini',    icon: '💎' },
+  CHATGPT:    { name: 'ChatGPT',    icon: '🤖' },
+  CLAUDE:     { name: 'Claude',     icon: '🟠' },
+  PERPLEXITY: { name: 'Perplexity', icon: '🔵' },
+  GEMINI:     { name: 'Gemini',     icon: '💎' },
 }
 
 const SENTIMENT_LABELS: Record<string, { label: string; color: string }> = {
-  POSITIVE: { label: 'Positif',  color: 'text-green-400 bg-green-500/10' },
-  NEUTRAL:  { label: 'Neutre',   color: 'text-amber-400 bg-amber-500/10' },
-  NEGATIVE: { label: 'Négatif',  color: 'text-red-400   bg-red-500/10'   },
+  POSITIVE: { label: 'Positif', color: 'text-green-400 bg-green-500/10' },
+  NEUTRAL:  { label: 'Neutre',  color: 'text-amber-400 bg-amber-500/10' },
+  NEGATIVE: { label: 'Négatif', color: 'text-red-400 bg-red-500/10' },
 }
 
 const PRIORITY_COLORS = {
-  critical:     'border-red-500/30    bg-red-500/5    text-red-400',
-  important:    'border-amber-500/30  bg-amber-500/5  text-amber-400',
-  optimization: 'border-green-500/30  bg-green-500/5  text-green-400',
+  critical:     'border-red-500/30 bg-red-500/5 text-red-400',
+  important:    'border-amber-500/30 bg-amber-500/5 text-amber-400',
+  optimization: 'border-green-500/30 bg-green-500/5 text-green-400',
 }
 
 const PRIORITY_BADGE = {
-  critical:     'bg-red-500/20    text-red-400',
-  important:    'bg-amber-500/20  text-amber-400',
-  optimization: 'bg-green-500/20  text-green-400',
+  critical:     'bg-red-500/20 text-red-400',
+  important:    'bg-amber-500/20 text-amber-400',
+  optimization: 'bg-green-500/20 text-green-400',
 }
 
-// ─── Gauge SVG (server-safe) ──────────────────────────────────────────────────
+// ─── Gauge SVG ────────────────────────────────────────────────────────────────
 
 function ScoreGauge({ score }: { score: number }) {
   const r = 64
-  const cx = 80
-  const cy = 80
   const circumference = 2 * Math.PI * r
   const dashOffset = circumference * (1 - score / 100)
   const color = getGaugeColor(score)
-  const textColor = getScoreTextColor(score)
   const label = getScoreLabel(score)
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-2 shrink-0">
       <div className="relative w-40 h-40">
-        <svg
-          className="w-40 h-40"
-          viewBox="0 0 160 160"
-          style={{ transform: 'rotate(-90deg)' }}
-        >
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272A" strokeWidth="10" />
+        <svg className="w-40 h-40" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx="80" cy="80" r={r} fill="none" stroke="#27272A" strokeWidth="10" />
           <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth="10"
+            cx="80" cy="80" r={r}
+            fill="none" stroke={color} strokeWidth="10"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={dashOffset}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-4xl font-bold font-mono ${textColor}`}>{score}</span>
+          <span className={`text-4xl font-bold font-mono ${getScoreTextColor(score)}`}>{score}</span>
           <span className="text-xs text-muted-foreground">/ 100</span>
         </div>
       </div>
@@ -138,7 +127,6 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
     minute: '2-digit',
   })
 
-  // Aggregate competitor data
   const competitorMap = new Map<string, string[]>()
   for (const result of scan.results) {
     const comps: string[] = (() => {
@@ -172,57 +160,69 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
   const brandName = scan.brand.name
   const brandDomain = scan.brand.domain
 
-  return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
-      {/* Back link */}
-      <Link
-        href="/scans"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour aux scans
-      </Link>
+  const quickWins = recommendations.filter(r => r.category === 'quick-win')
+  const cetteSmaine = recommendations.filter(r => r.category === 'cette-semaine')
+  const ceMois = recommendations.filter(r => r.category === 'ce-mois')
 
-      {/* ── Section 1: Header ──────────────────────────────────────────────── */}
-      <div className="card-glow rounded-2xl border border-border bg-card p-6 md:p-8">
-        <div className="flex flex-col md:flex-row items-center gap-8">
+  const DIFFICULTY_BADGE: Record<string, string> = {
+    facile: 'bg-green-500/20 text-green-400',
+    moyen: 'bg-amber-500/20 text-amber-400',
+    avancé: 'bg-red-500/20 text-red-400',
+  }
+
+  return (
+    <div className="p-4 lg:p-6 space-y-5">
+
+      {/* ── Top bar: back + download ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          href="/scans"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Retour aux scans
+        </Link>
+        <a
+          href={`/api/reports/${scan.brand.id}`}
+          className="inline-flex items-center gap-2 text-sm border border-border rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          <span className="hidden sm:inline">Télécharger </span>PDF
+        </a>
+      </div>
+
+      {/* ── Row 1: Score (left 1/3) + LLM 2×2 (right 2/3) ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Left: gauge + meta */}
+        <div className="card-glow rounded-2xl border border-border bg-card p-6 flex flex-col items-center justify-center gap-4">
           <ScoreGauge score={scan.globalScore} />
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-xl font-bold leading-snug mb-2">
+          <div className="text-center w-full">
+            <h1 className="text-base font-bold leading-snug mb-2">
               &ldquo;{scan.query}&rdquo;
             </h1>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-xs text-muted-foreground mb-3">
               {scan.brand.name} · {date}
             </p>
-            <div className="flex flex-wrap justify-center md:justify-start gap-2">
-              <span className="text-xs bg-secondary border border-border rounded-full px-3 py-1">
-                {mentionedCount}/{scan.results.length} LLMs mentionnent
+            <div className="flex flex-wrap justify-center gap-2">
+              <span className={`text-xs font-medium rounded-full px-3 py-1 ${
+                mentionedCount >= 3 ? 'bg-green-500/20 text-green-400' :
+                mentionedCount >= 2 ? 'bg-amber-500/20 text-amber-400' :
+                'bg-red-500/20 text-red-400'
+              }`}>
+                {mentionedCount}/{scan.results.length} LLMs
               </span>
               {scan.brand.domain && (
-                <span className="text-xs bg-secondary border border-border rounded-full px-3 py-1">
+                <span className="text-xs bg-secondary border border-border rounded-full px-3 py-1 text-muted-foreground">
                   {scan.brand.domain}
                 </span>
               )}
             </div>
           </div>
-          <div className="shrink-0">
-            <a
-              href={`/api/reports/${scan.brand.id}`}
-              className="inline-flex items-center gap-2 text-sm border border-border rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Télécharger PDF
-            </a>
-          </div>
         </div>
-      </div>
 
-      {/* ── Section 2: LLM Breakdown ──────────────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-          Résultats par IA
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Right: 2×2 LLM score cards */}
+        <div className="lg:col-span-2 grid grid-cols-2 gap-3">
           {scan.results.map((result) => {
             const llm = LLM_LABELS[result.llm] ?? { name: result.llm, icon: '🔷' }
             const score = getLLMScore(result)
@@ -230,12 +230,11 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
             const border = getLLMCardBorder(score)
 
             return (
-              <div key={result.id} className={`rounded-xl border p-5 space-y-3 ${border}`}>
-                {/* LLM header */}
+              <div key={result.id} className={`rounded-xl border p-4 space-y-3 ${border}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-lg">{llm.icon}</span>
-                    <span className="font-semibold">{llm.name}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-base">{llm.icon}</span>
+                    <span className="font-semibold text-sm">{llm.name}</span>
                     {result.mentioned ? (
                       <Badge className="bg-green-500/20 text-green-400 text-xs gap-1">
                         <CheckCircle2 className="h-3 w-3" />
@@ -248,23 +247,20 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
                       </Badge>
                     )}
                     {sentiment && (
-                      <Badge className={`text-xs ${sentiment.color}`}>
-                        {sentiment.label}
-                      </Badge>
+                      <Badge className={`text-xs ${sentiment.color}`}>{sentiment.label}</Badge>
                     )}
                   </div>
-                  <span className={`font-mono font-bold text-lg shrink-0 ${getScoreTextColor(score)}`}>
+                  <span className={`font-mono font-bold text-base shrink-0 ${getScoreTextColor(score)}`}>
                     {score}/100
                   </span>
                 </div>
 
-                {/* Context */}
                 {result.mentioned && result.context ? (
                   <div className="bg-background/50 rounded-lg p-3 border border-white/5">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1.5">
                       Extrait mentionné
                     </p>
-                    <p className="text-sm leading-relaxed">
+                    <p className="text-sm leading-relaxed line-clamp-3">
                       {result.context.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
                         part.startsWith('**') && part.endsWith('**') ? (
                           <mark key={i} className="bg-primary/20 text-primary rounded px-0.5 not-italic">
@@ -281,204 +277,143 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
                     </p>
                   </div>
                 ) : null}
-
-                {/* Collapsible raw response */}
-                {result.rawResponse && (
-                  <details className="group">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors select-none list-none flex items-center gap-1.5">
-                      <span className="group-open:hidden">▶</span>
-                      <span className="hidden group-open:inline">▼</span>
-                      Réponse brute
-                    </summary>
-                    <div className="mt-2 bg-background/50 rounded-lg p-3 border border-white/5">
-                      <p className="text-xs font-mono text-muted-foreground leading-relaxed">
-                        {result.rawResponse.slice(0, 300)}
-                        {result.rawResponse.length > 300 && '…'}
-                      </p>
-                      {result.rawResponse.length > 300 && (
-                        <details className="mt-1">
-                          <summary className="cursor-pointer text-xs text-primary hover:underline select-none list-none">
-                            Voir tout
-                          </summary>
-                          <pre className="mt-2 text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
-                            {result.rawResponse}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  </details>
-                )}
               </div>
             )
           })}
         </div>
       </div>
 
-      {/* ── Section 3: Competitors ────────────────────────────────────────── */}
-      {competitors.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Marques recommandées à votre place
-          </h2>
-          <div className="card-glow rounded-xl border border-border bg-card p-5">
-            <div className="flex flex-wrap gap-3">
-              {competitors.map(([name, llms]) => (
-                <div
-                  key={name}
-                  className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2"
-                >
-                  <span className="font-medium text-sm">{name}</span>
-                  <div className="flex gap-1">
-                    {llms.map((llm) => (
-                      <span
-                        key={llm}
-                        className="text-xs bg-background/50 border border-border rounded px-1.5 py-0.5 text-muted-foreground"
-                        title={LLM_LABELS[llm]?.name ?? llm}
-                      >
-                        {LLM_LABELS[llm]?.icon ?? llm}
-                      </span>
-                    ))}
-                  </div>
+      {/* ── Row 2: Competitors (left) + Recommendations (right) ─────────────── */}
+      {(competitors.length > 0 || recommendations.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Competitors */}
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Marques recommandées à votre place
+            </h2>
+            {competitors.length > 0 ? (
+              <div className="card-glow rounded-xl border border-border bg-card p-4">
+                <div className="flex flex-wrap gap-2">
+                  {competitors.map(([name, llms]) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2"
+                    >
+                      <span className="font-medium text-sm">{name}</span>
+                      <div className="flex gap-0.5">
+                        {llms.map((llm) => (
+                          <span
+                            key={llm}
+                            className="text-xs bg-background/50 border border-border rounded px-1.5 py-0.5 text-muted-foreground"
+                            title={LLM_LABELS[llm]?.name ?? llm}
+                          >
+                            {LLM_LABELS[llm]?.icon ?? llm}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="card-glow rounded-xl border border-border bg-card p-6 text-center">
+                <p className="text-sm text-muted-foreground">Aucun concurrent détecté dans ce scan</p>
+              </div>
+            )}
+          </div>
+
+          {/* All recommendations grouped by category */}
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Plan d&apos;action
+            </h2>
+            {recommendations.length > 0 ? (
+              <div className="space-y-2">
+                {[
+                  { group: quickWins, emoji: '⚡', label: 'Quick Win' },
+                  { group: cetteSmaine, emoji: '📅', label: 'Cette semaine' },
+                  { group: ceMois, emoji: '🗓️', label: 'Ce mois' },
+                ].flatMap(({ group, emoji, label }) =>
+                  group.map((rec, i) => (
+                    <div key={`${label}-${i}`} className={`rounded-xl border p-3.5 ${PRIORITY_COLORS[rec.priority]}`}>
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-base shrink-0 mt-0.5">{rec.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                            <span className="text-[10px] text-muted-foreground">{emoji} {label}</span>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${PRIORITY_BADGE[rec.priority]}`}>
+                              {rec.priorityLabel}
+                            </Badge>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${DIFFICULTY_BADGE[rec.difficulty] ?? ''}`}>
+                              {rec.difficulty}
+                            </Badge>
+                          </div>
+                          <p className="text-sm font-semibold">{rec.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{rec.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="card-glow rounded-xl border border-border bg-card p-6 text-center">
+                <p className="text-sm text-muted-foreground">Aucune recommandation disponible</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Section 4: Recommendations ────────────────────────────────────── */}
-      {recommendations.length > 0 && (() => {
-        const quickWins = recommendations.filter(r => r.category === 'quick-win')
-        const cetteSmaine = recommendations.filter(r => r.category === 'cette-semaine')
-        const ceMois = recommendations.filter(r => r.category === 'ce-mois')
-
-        const DIFFICULTY_BADGE: Record<string, string> = {
-          facile: 'bg-green-500/20 text-green-400',
-          moyen: 'bg-amber-500/20 text-amber-400',
-          avancé: 'bg-red-500/20 text-red-400',
-        }
-
-        function RecCard({ rec, i }: { rec: (typeof recommendations)[0]; i: number }) {
-          return (
-            <div
-              key={i}
-              className={`rounded-xl border p-5 ${PRIORITY_COLORS[rec.priority]}`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-xl shrink-0 mt-0.5">{rec.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <Badge className={`text-xs ${PRIORITY_BADGE[rec.priority]}`}>
-                      {rec.priorityLabel}
-                    </Badge>
-                    <Badge className={`text-xs ${DIFFICULTY_BADGE[rec.difficulty]}`}>
-                      {rec.difficulty}
-                    </Badge>
-                    <h3 className="font-semibold text-sm">{rec.title}</h3>
+      {/* ── Row 3: Raw LLM responses (full width, collapsible) ──────────────── */}
+      {scan.results.some(r => r.rawResponse) && (
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Réponses brutes des IA
+          </h2>
+          <div className="space-y-2">
+            {scan.results.map((result) => {
+              if (!result.rawResponse) return null
+              const llm = LLM_LABELS[result.llm] ?? { name: result.llm, icon: '🔷' }
+              return (
+                <details key={result.id} className="group card-glow rounded-xl border border-border bg-card overflow-hidden">
+                  <summary className="cursor-pointer px-5 py-3.5 flex items-center justify-between gap-2 hover:bg-secondary/30 transition-colors select-none list-none">
+                    <div className="flex items-center gap-2">
+                      <span>{llm.icon}</span>
+                      <span className="text-sm font-medium">{llm.name}</span>
+                      {result.mentioned ? (
+                        <Badge className="bg-green-500/20 text-green-400 text-xs">✓ Mentionné</Badge>
+                      ) : (
+                        <Badge className="bg-red-500/20 text-red-400 text-xs">✗ Non cité</Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground group-open:hidden">▶ Voir la réponse</span>
+                    <span className="text-xs text-muted-foreground hidden group-open:inline">▼ Masquer</span>
+                  </summary>
+                  <div className="px-5 pb-5 pt-3 border-t border-border">
+                    <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
+                      {result.rawResponse}
+                    </pre>
+                    {result.rawResponse.length > 300 && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <ContentGenerateButton
+                          brandId={brandId}
+                          brandName={brandName}
+                          type={result.rawResponse.toLowerCase().includes('faq') ? 'faq' : 'article'}
+                          context={{ industry: brandDomain ?? undefined }}
+                          label="✨ Générer du contenu basé sur cette réponse"
+                          cost={2}
+                        />
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground mb-3">{rec.description}</p>
-                  <ul className="space-y-1 mb-3">
-                    {rec.actions.map((action, j) => (
-                      <li key={j} className="text-xs text-muted-foreground flex items-start gap-2">
-                        <span className="shrink-0 mt-0.5 text-primary">→</span>
-                        {action}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/5">
-                    <span className="text-xs text-muted-foreground">
-                      <span className="text-foreground font-medium">Impact :</span> {rec.estimatedImpact}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      <span className="text-foreground font-medium">Résultats en :</span> {rec.timeToResult}
-                    </span>
-                    {rec.title.toLowerCase().includes('article') || rec.title.toLowerCase().includes('contenu') ? (
-                      <ContentGenerateButton
-                        brandId={brandId}
-                        brandName={brandName}
-                        type="article"
-                        context={{ industry: brandDomain ?? undefined }}
-                        label="✨ Générer l'article"
-                        cost={3}
-                      />
-                    ) : rec.title.toLowerCase().includes('faq') ? (
-                      <ContentGenerateButton
-                        brandId={brandId}
-                        brandName={brandName}
-                        type="faq"
-                        context={{ industry: brandDomain ?? undefined }}
-                        label="✨ Générer la FAQ"
-                        cost={2}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )
-        }
-
-        return (
-          <div className="space-y-8">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Plan d&apos;action
-            </h2>
-
-            {quickWins.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">⚡</span>
-                  <h3 className="text-sm font-semibold text-foreground">Quick Wins — 30 minutes</h3>
-                  <span className="text-xs text-muted-foreground">(impact rapide, effort minimal)</span>
-                </div>
-                <div className="space-y-3">
-                  {quickWins.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
-                </div>
-              </div>
-            )}
-
-            {cetteSmaine.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">📅</span>
-                  <h3 className="text-sm font-semibold text-foreground">Cette semaine</h3>
-                  <span className="text-xs text-muted-foreground">(actions à fort impact)</span>
-                </div>
-                <div className="space-y-3">
-                  {cetteSmaine.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
-                </div>
-              </div>
-            )}
-
-            {ceMois.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">🗓️</span>
-                  <h3 className="text-sm font-semibold text-foreground">Ce mois</h3>
-                  <span className="text-xs text-muted-foreground">(stratégie long terme)</span>
-                </div>
-                <div className="space-y-3">
-                  {ceMois.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
-                </div>
-              </div>
-            )}
-
-            {/* Prochaines étapes */}
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-              <div className="flex items-start gap-3">
-                <span className="text-xl shrink-0">📊</span>
-                <div>
-                  <h3 className="font-semibold text-sm mb-1">Prochaines étapes</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Commencez par les Quick Wins cette semaine, puis attaquez les actions &quot;Cette semaine&quot; d&apos;ici vendredi.{' '}
-                    <strong className="text-foreground">Rescannez dans 2 semaines</strong> pour mesurer l&apos;impact de vos actions et ajuster votre plan.
-                  </p>
-                </div>
-              </div>
-            </div>
+                </details>
+              )
+            })}
           </div>
-        )
-      })()}
+        </div>
+      )}
     </div>
   )
 }

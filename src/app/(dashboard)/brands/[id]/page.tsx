@@ -78,35 +78,29 @@ const DIFFICULTY_BADGE: Record<string, string> = {
 
 // ─── Score Gauge ───────────────────────────────────────────────────────────────
 
-function ScoreGauge({ score }: { score: number }) {
-  const r = 64
+function ScoreGauge({ score, size = 'md' }: { score: number; size?: 'md' | 'lg' }) {
+  const r = size === 'lg' ? 72 : 56
+  const dim = size === 'lg' ? 180 : 140
   const circumference = 2 * Math.PI * r
   const dashOffset = circumference * (1 - score / 100)
   const color = getGaugeColor(score)
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative w-36 h-36">
-        <svg className="w-36 h-36" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="80" cy="80" r={r} fill="none" stroke="#27272A" strokeWidth="10" />
-          <circle
-            cx="80"
-            cy="80"
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-4xl font-bold font-mono ${getScoreColor(score)}`}>{score}</span>
-          <span className="text-xs text-muted-foreground">/ 100</span>
-        </div>
+    <div className="relative shrink-0" style={{ width: dim, height: dim }}>
+      <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="#27272A" strokeWidth="10" />
+        <circle
+          cx={dim / 2} cy={dim / 2} r={r}
+          fill="none" stroke={color} strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`font-bold font-mono ${getScoreColor(score)} ${size === 'lg' ? 'text-4xl' : 'text-3xl'}`}>{score}</span>
+        <span className="text-xs text-muted-foreground">/ 100</span>
       </div>
-      <span className={`text-sm font-semibold ${getScoreColor(score)}`}>{getScoreLabel(score)}</span>
     </div>
   )
 }
@@ -154,7 +148,6 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     return { llm, score: r ? getLLMScore(r) : null, mentioned: r?.mentioned ?? false }
   })
 
-  // Aggregate competitor stats across all scans
   const competitorStats = new Map<string, { totalMentions: number; llms: Set<string>; scanIds: Set<string> }>()
   for (const result of allScanResults) {
     const comps: string[] = (() => {
@@ -180,7 +173,6 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
       totalMentions: stats.totalMentions,
     }))
 
-  // Recommendations from latest scan
   const recommendations = latestScan
     ? generateRecommendations(
         latestScan.results.map((r) => ({
@@ -198,107 +190,197 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
   const quickWins = recommendations.filter((r) => r.category === 'quick-win')
   const cetteSmaine = recommendations.filter((r) => r.category === 'cette-semaine')
   const ceMois = recommendations.filter((r) => r.category === 'ce-mois')
+  const mentionedCount = llmScores.filter((s) => s.mentioned).length
 
   return (
-    <div className="p-6 lg:p-8 space-y-8 max-w-5xl mx-auto">
-      {/* Back */}
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Dashboard
-      </Link>
+    <div className="p-4 lg:p-6 space-y-5">
 
-      {/* ── Section A: Brand Overview ───────────────────────────────────────── */}
-      <div className="card-glow rounded-2xl border border-border bg-card p-6 md:p-8">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          <ScoreGauge score={globalScore} />
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-2xl font-bold mb-1">{brand.name}</h1>
-            {brand.domain && (
-              <p className="text-sm text-muted-foreground mb-3">{brand.domain}</p>
-            )}
-            {trend !== 0 ? (
-              <div className={`inline-flex items-center gap-1.5 text-sm font-medium ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                {trend > 0 ? '+' : ''}{trend} pts depuis le scan précédent
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Dashboard
+        </Link>
+        <DashboardScanButton
+          brand={{ id: brand.id, name: brand.name, keywords, domain: brand.domain ?? null }}
+        />
+      </div>
+
+      {/* ── Hero: Score (left 1/3) + LLM 2×2 (right 2/3) ──────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Left: gauge + brand info + mini stats */}
+        <div className="card-glow rounded-2xl border border-border bg-card p-6 flex flex-col gap-5">
+          <div className="flex items-center gap-6">
+            <ScoreGauge score={globalScore} size="lg" />
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold truncate">{brand.name}</h1>
+              {brand.domain && (
+                <p className="text-sm text-muted-foreground mt-0.5">{brand.domain}</p>
+              )}
+              <div className="mt-3">
+                {trend !== 0 ? (
+                  <div className={`inline-flex items-center gap-1.5 text-sm font-medium ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                    {trend > 0 ? '+' : ''}{trend} pts vs scan précédent
+                  </div>
+                ) : latestScan ? (
+                  <div className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                    <Minus className="h-3 w-3" /> Score stable
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucun scan pour l&apos;instant</p>
+                )}
               </div>
-            ) : latestScan ? (
-              <div className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                <Minus className="h-3 w-3" /> Score stable
+              <div className="mt-2">
+                <span className={`text-sm font-semibold ${getScoreColor(globalScore)}`}>
+                  {getScoreLabel(globalScore)}
+                </span>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Aucun scan pour l&apos;instant</p>
-            )}
+            </div>
           </div>
-          <DashboardScanButton
-            brand={{ id: brand.id, name: brand.name, keywords, domain: brand.domain ?? null }}
-          />
+
+          {/* Mini stats row */}
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
+            <div className="text-center">
+              <p className="text-2xl font-bold font-mono">{allScans.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Scans</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold font-mono">{sortedCompetitors.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Concurrents</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold font-mono">
+                {mentionedCount}
+                <span className="text-sm font-normal text-muted-foreground">/4</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">LLMs actifs</p>
+            </div>
+          </div>
         </div>
 
-        {/* LLM cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-border">
+        {/* Right: 2×2 LLM score cards */}
+        <div className="lg:col-span-2 grid grid-cols-2 gap-3">
           {llmScores.map(({ llm, score, mentioned }) => (
-            <div key={llm} className="rounded-xl bg-secondary/50 border border-border p-3 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{LLM_LABELS[llm]}</p>
-              <p className={`text-2xl font-bold font-mono ${score !== null ? getScoreColor(score) : 'text-muted-foreground'}`}>
-                {score !== null ? score : '—'}
-              </p>
-              {score !== null && (
-                <Badge className={`text-[10px] mt-1.5 ${mentioned ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+            <div key={llm} className="card-glow rounded-xl bg-card border border-border p-4 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium">{LLM_LABELS[llm]}</p>
+                <Badge className={`text-[10px] ${mentioned ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                   {mentioned ? '✓ Cité' : '✗ Absent'}
                 </Badge>
+              </div>
+              <p className={`text-4xl font-bold font-mono mt-auto ${score !== null ? getScoreColor(score) : 'text-muted-foreground'}`}>
+                {score !== null ? score : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">/ 100</p>
+              {score !== null && (
+                <p className={`text-xs font-medium mt-1.5 ${getScoreColor(score)}`}>
+                  {getScoreLabel(score)}
+                </p>
               )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Section B+C: Competitor Intelligence ──────────────────────────── */}
-      {sortedCompetitors.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold">Analyse concurrentielle</h2>
-              <p className="text-sm text-muted-foreground">
-                {sortedCompetitors.length} concurrent{sortedCompetitors.length > 1 ? 's' : ''} détecté{sortedCompetitors.length > 1 ? 's' : ''} par les IA
-              </p>
-            </div>
-            {canAnalyzeCompetitors ? (
-              <Badge className="shrink-0 bg-primary/20 text-primary border-primary/30 gap-1.5">
-                <Sparkles className="h-3 w-3" />
-                Analyse IA activée
-              </Badge>
-            ) : (
-              <Link href="/billing">
-                <Badge className="shrink-0 bg-amber-500/10 text-amber-400 border-amber-500/30 gap-1.5 cursor-pointer hover:bg-amber-500/20 transition-colors">
-                  <Lock className="h-3 w-3" />
-                  Disponible avec le plan Pro
+      {/* ── Analysis: Competitors (left) + Action Plan (right) ──────────────── */}
+      {(sortedCompetitors.length > 0 || recommendations.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Competitors */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold">Analyse concurrentielle</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {sortedCompetitors.length > 0
+                    ? `${sortedCompetitors.length} concurrent${sortedCompetitors.length > 1 ? 's' : ''} détecté${sortedCompetitors.length > 1 ? 's' : ''}`
+                    : 'Aucun concurrent détecté'}
+                </p>
+              </div>
+              {canAnalyzeCompetitors ? (
+                <Badge className="shrink-0 bg-primary/20 text-primary border-primary/30 gap-1.5">
+                  <Sparkles className="h-3 w-3" />
+                  Analyse IA
                 </Badge>
-              </Link>
+              ) : (
+                <Link href="/billing">
+                  <Badge className="shrink-0 bg-amber-500/10 text-amber-400 border-amber-500/30 gap-1.5 cursor-pointer hover:bg-amber-500/20 transition-colors">
+                    <Lock className="h-3 w-3" />
+                    Pro
+                  </Badge>
+                </Link>
+              )}
+            </div>
+            {sortedCompetitors.length > 0 ? (
+              <div className="card-glow rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
+                {sortedCompetitors.map((competitor, idx) => (
+                  <CompetitorRow
+                    key={competitor.name}
+                    competitor={competitor}
+                    brandName={brand.name}
+                    canAnalyze={canAnalyzeCompetitors}
+                    rank={idx + 1}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="card-glow rounded-xl border border-border bg-card p-6 text-center">
+                <p className="text-sm text-muted-foreground">Les concurrents apparaîtront après vos premiers scans</p>
+              </div>
             )}
           </div>
 
-          <div className="card-glow rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
-            {sortedCompetitors.map((competitor, idx) => (
-              <CompetitorRow
-                key={competitor.name}
-                competitor={competitor}
-                brandName={brand.name}
-                canAnalyze={canAnalyzeCompetitors}
-                rank={idx + 1}
-              />
-            ))}
+          {/* Action Plan — compact cards */}
+          <div className="space-y-3">
+            <h2 className="text-base font-bold">Plan d&apos;action recommandé</h2>
+            {recommendations.length > 0 ? (
+              <div className="space-y-2">
+                {[
+                  { group: quickWins, emoji: '⚡', label: 'Quick Win' },
+                  { group: cetteSmaine, emoji: '📅', label: 'Cette semaine' },
+                  { group: ceMois, emoji: '🗓️', label: 'Ce mois' },
+                ].flatMap(({ group, emoji, label }) =>
+                  group.map((rec, i) => (
+                    <div key={`${label}-${i}`} className={`rounded-xl border p-3.5 ${PRIORITY_COLORS[rec.priority]}`}>
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-base shrink-0 mt-0.5">{rec.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                            <span className="text-[10px] text-muted-foreground">{emoji} {label}</span>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${PRIORITY_BADGE[rec.priority]}`}>
+                              {rec.priorityLabel}
+                            </Badge>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${DIFFICULTY_BADGE[rec.difficulty] ?? ''}`}>
+                              {rec.difficulty}
+                            </Badge>
+                          </div>
+                          <p className="text-sm font-semibold">{rec.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{rec.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="card-glow rounded-xl border border-border bg-card p-6 text-center">
+                <p className="text-sm text-muted-foreground">Lancez un scan pour obtenir des recommandations</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Section D: Scan History ────────────────────────────────────────── */}
+      {/* ── Scan History ────────────────────────────────────────────────────── */}
       {allScans.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">Historique des scans</h2>
+            <h2 className="text-base font-bold">Historique des scans</h2>
             <Link
               href={`/scans?brand=${brand.id}`}
               className="text-xs text-primary hover:underline flex items-center gap-1"
@@ -306,17 +388,16 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
               Voir tout <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-
           <div className="card-glow rounded-xl border border-border bg-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Requête</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Date</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">LLMs</th>
-                    <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Score</th>
-                    <th className="px-4 py-3 w-8" />
+                    <th className="text-left px-5 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Requête</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Date</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">LLMs</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Score</th>
+                    <th className="px-4 py-2.5 w-8" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -332,7 +413,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell">
                           <p className="text-sm text-muted-foreground whitespace-nowrap">
-                            {scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            {scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                           </p>
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell">
@@ -368,7 +449,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {/* ── Section E: Scheduled Scans ────────────────────────────────────── */}
+      {/* ── Scheduled Scans ─────────────────────────────────────────────────── */}
       <ScheduledScanSection
         brandId={brand.id}
         initial={scheduledScan ? {
@@ -379,62 +460,6 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
           enabled: scheduledScan.enabled,
         } : null}
       />
-
-      {/* ── Section F: Action Plan ─────────────────────────────────────────── */}
-      {recommendations.length > 0 && (
-        <div className="space-y-6">
-          <h2 className="text-lg font-bold">Plan d&apos;action recommandé</h2>
-
-          {[
-            { group: quickWins, emoji: '⚡', title: 'Quick Wins — 30 minutes', sub: '(impact rapide, effort minimal)' },
-            { group: cetteSmaine, emoji: '📅', title: 'Cette semaine', sub: '(actions à fort impact)' },
-            { group: ceMois, emoji: '🗓️', title: 'Ce mois', sub: '(stratégie long terme)' },
-          ].map(({ group, emoji, title, sub }) =>
-            group.length > 0 ? (
-              <div key={title}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base">{emoji}</span>
-                  <h3 className="text-sm font-semibold">{title}</h3>
-                  <span className="text-xs text-muted-foreground">{sub}</span>
-                </div>
-                <div className="space-y-3">
-                  {group.map((rec, i) => (
-                    <div key={i} className={`rounded-xl border p-5 ${PRIORITY_COLORS[rec.priority]}`}>
-                      <div className="flex items-start gap-3">
-                        <span className="text-xl shrink-0 mt-0.5">{rec.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <Badge className={`text-xs ${PRIORITY_BADGE[rec.priority]}`}>{rec.priorityLabel}</Badge>
-                            <Badge className={`text-xs ${DIFFICULTY_BADGE[rec.difficulty] ?? ''}`}>{rec.difficulty}</Badge>
-                            <h4 className="font-semibold text-sm">{rec.title}</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-3">{rec.description}</p>
-                          <ul className="space-y-1 mb-3">
-                            {rec.actions.map((action, j) => (
-                              <li key={j} className="text-xs text-muted-foreground flex items-start gap-2">
-                                <span className="shrink-0 mt-0.5 text-primary">→</span>
-                                {action}
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="flex flex-wrap gap-3 pt-2 border-t border-white/5">
-                            <span className="text-xs text-muted-foreground">
-                              <span className="text-foreground font-medium">Impact :</span> {rec.estimatedImpact}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              <span className="text-foreground font-medium">Résultats en :</span> {rec.timeToResult}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null
-          )}
-        </div>
-      )}
     </div>
   )
 }

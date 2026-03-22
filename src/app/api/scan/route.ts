@@ -7,6 +7,27 @@ import { scanBrand } from '@/lib/scanner'
 import { calculateGlobalScore } from '@/lib/analysis'
 import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
 
+export async function GET(req: Request) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const brandId = searchParams.get('brandId')
+
+  const scans = await prisma.scan.findMany({
+    where: {
+      brand: { userId: session.user.id },
+      ...(brandId ? { brandId } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    include: { results: true },
+  })
+
+  return NextResponse.json({ scans })
+}
+
 const scanSchema = z.object({
   brandId: z.string(),
   query: z.string().min(1).max(500),

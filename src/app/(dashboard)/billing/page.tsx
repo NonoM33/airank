@@ -28,7 +28,7 @@ export default async function BillingPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Facturation</h1>
+        <h1 className="text-2xl font-bold">Abonnement</h1>
         <p className="text-muted-foreground">Gérez votre abonnement AIRank</p>
       </div>
 

@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, BarChart3, Zap, TrendingUp, Calendar } from 'lucide-react'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
 import { BrandFilter } from '@/components/dashboard/BrandFilter'
 
@@ -43,7 +43,7 @@ export default async function ScansPage({
 
   if (brands.length === 0) {
     return (
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="p-4 lg:p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Scans</h1>
           <p className="text-muted-foreground">Historique de vos analyses LLM</p>
@@ -59,12 +59,10 @@ export default async function ScansPage({
     )
   }
 
-  // Determine active brand for filter
   const activeBrand = brandFilter
     ? (brands.find((b) => b.id === brandFilter) ?? null)
     : null
 
-  // Fetch scans — filtered by brand or all brands
   const scans = await prisma.scan.findMany({
     where: activeBrand
       ? { brandId: activeBrand.id }
@@ -78,8 +76,19 @@ export default async function ScansPage({
 
   const defaultBrandId = activeBrand?.id ?? brands[0].id
 
+  // Compute stats
+  const avgScore = scans.length > 0
+    ? Math.round(scans.reduce((sum, s) => sum + s.globalScore, 0) / scans.length)
+    : 0
+  const bestScore = scans.length > 0 ? Math.max(...scans.map((s) => s.globalScore)) : 0
+  const totalMentions = scans.reduce((sum, s) => sum + s.results.filter((r) => r.mentioned).length, 0)
+  const totalResults = scans.reduce((sum, s) => sum + s.results.length, 0)
+  const mentionRate = totalResults > 0 ? Math.round((totalMentions / totalResults) * 100) : 0
+
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 lg:p-6 space-y-5">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Scans</h1>
@@ -93,7 +102,7 @@ export default async function ScansPage({
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {brands.length > 1 && (
             <BrandFilter
               brands={brands.map((b) => ({ id: b.id, name: b.name }))}
@@ -104,6 +113,41 @@ export default async function ScansPage({
         </div>
       </div>
 
+      {/* ── Stats row ──────────────────────────────────────────────────────── */}
+      {scans.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="card-glow rounded-xl bg-card border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Total scans</p>
+            </div>
+            <p className="text-2xl font-bold font-mono">{scans.length}</p>
+          </div>
+          <div className="card-glow rounded-xl bg-card border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Score moyen</p>
+            </div>
+            <p className={`text-2xl font-bold font-mono ${getScoreColor(avgScore)}`}>{avgScore}</p>
+          </div>
+          <div className="card-glow rounded-xl bg-card border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Taux de mention</p>
+            </div>
+            <p className={`text-2xl font-bold font-mono ${getScoreColor(mentionRate)}`}>{mentionRate}%</p>
+          </div>
+          <div className="card-glow rounded-xl bg-card border border-border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Meilleur score</p>
+            </div>
+            <p className={`text-2xl font-bold font-mono ${getScoreColor(bestScore)}`}>{bestScore}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Scans table ────────────────────────────────────────────────────── */}
       {scans.length === 0 ? (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
           <p className="text-sm text-muted-foreground mb-6 text-center">
@@ -117,7 +161,7 @@ export default async function ScansPage({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Requête
                   </th>
                   {brands.length > 1 && !activeBrand && (
@@ -131,7 +175,7 @@ export default async function ScansPage({
                   <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
                     LLMs
                   </th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Score
                   </th>
                   <th className="px-4 py-3 w-10" />
@@ -142,7 +186,7 @@ export default async function ScansPage({
                   const mentionCount = scan.results.filter((r) => r.mentioned).length
                   return (
                     <tr key={scan.id} className="hover:bg-secondary/30 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5">
                         <p className="text-sm font-medium max-w-xs truncate">{scan.query}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
                           {scan.createdAt.toLocaleDateString('fr-FR', {
@@ -151,7 +195,7 @@ export default async function ScansPage({
                         </p>
                       </td>
                       {brands.length > 1 && !activeBrand && (
-                        <td className="px-4 py-4 hidden md:table-cell">
+                        <td className="px-4 py-3.5 hidden md:table-cell">
                           <Link
                             href={`/brands/${scan.brand.id}`}
                             className="text-xs text-muted-foreground hover:text-primary transition-colors"
@@ -160,7 +204,7 @@ export default async function ScansPage({
                           </Link>
                         </td>
                       )}
-                      <td className="px-4 py-4 hidden sm:table-cell">
+                      <td className="px-4 py-3.5 hidden sm:table-cell">
                         <p className="text-sm text-muted-foreground whitespace-nowrap">
                           {scan.createdAt.toLocaleDateString('fr-FR', {
                             day: '2-digit', month: '2-digit', year: '2-digit',
@@ -168,7 +212,7 @@ export default async function ScansPage({
                           })}
                         </p>
                       </td>
-                      <td className="px-4 py-4 hidden lg:table-cell">
+                      <td className="px-4 py-3.5 hidden lg:table-cell">
                         <div className="flex items-center gap-1">
                           {scan.results.map((r) => (
                             <Badge
@@ -185,12 +229,12 @@ export default async function ScansPage({
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-5 py-3.5 text-right">
                         <span className={`font-mono font-bold text-sm ${getScoreColor(scan.globalScore)}`}>
                           {scan.globalScore}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3.5">
                         <Link
                           href={`/scans/${scan.id}`}
                           className="text-muted-foreground hover:text-foreground transition-colors"
