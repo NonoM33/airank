@@ -137,3 +137,9 @@
 .card-glow {
   box-shadow: 0 0 0 1px #27272A, 0 0 20px -5px rgba(99, 102, 241, 0.1);
 }
+
+/* Framer Motion SSR fallback — ensure content visible even if JS fails */
+[style*="opacity: 0"], [style*="opacity:0"] {
+  opacity: 1 !important;
+  transform: none !important;
+}
