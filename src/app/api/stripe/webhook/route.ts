@@ -3,91 +3,142 @@ import { prisma } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 
+// Disable body parsing - Stripe needs raw body for signature verification
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
-const PRICE_TO_PLAN: Record<string, string> = {
+const PRICE_TO_PLAN: Record<string, 'STARTER' | 'PRO' | 'AGENCY'> = {
   [process.env.STRIPE_STARTER_PRICE_ID ?? '']: 'STARTER',
   [process.env.STRIPE_PRO_PRICE_ID ?? '']: 'PRO',
   [process.env.STRIPE_AGENCY_PRICE_ID ?? '']: 'AGENCY',
 }
 
-async function getPlanFromPriceId(priceId: string): Promise<string> {
-  return PRICE_TO_PLAN[priceId] ?? 'FREE'
+async function updateUserPlan(customerId: string, plan: 'FREE' | 'STARTER' | 'PRO' | 'AGENCY') {
+  const result = await prisma.user.updateMany({
+    where: { stripeId: customerId },
+    data: { plan },
+  })
+  console.log(`[Webhook] Updated ${result.count} user(s) to plan ${plan} for customer ${customerId}`)
+  return result
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const userId = session.client_reference_id ?? session.metadata?.userId
+  const plan = (session.metadata?.plan as 'STARTER' | 'PRO' | 'AGENCY') ?? 'PRO'
+  const customerId = typeof session.customer === 'string' ? session.customer : null
+
+  if (!userId) {
+    console.error('[Webhook] checkout.session.completed: no userId found')
+    return
+  }
+
+  console.log(`[Webhook] checkout.session.completed: userId=${userId}, plan=${plan}, customer=${customerId}`)
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      plan,
+      ...(customerId ? { stripeId: customerId } : {}),
+    },
+  })
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : null
+  if (!customerId) return
+
+  const priceId = subscription.items.data[0]?.price?.id ?? ''
+  const plan = PRICE_TO_PLAN[priceId] ?? 'FREE'
+
+  console.log(`[Webhook] subscription.updated: customer=${customerId}, status=${subscription.status}, plan=${plan}`)
+
+  if (subscription.status === 'active' || subscription.status === 'trialing') {
+    await updateUserPlan(customerId, plan)
+  } else if (subscription.status === 'past_due') {
+    // Keep plan active but log warning - give them time to pay
+    console.log(`[Webhook] subscription past_due for ${customerId} - keeping plan active`)
+  } else if (subscription.status === 'unpaid' || subscription.status === 'incomplete_expired') {
+    // Failed to pay - downgrade to FREE
+    await updateUserPlan(customerId, 'FREE')
+  }
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : null
+  if (!customerId) return
+
+  console.log(`[Webhook] subscription.deleted: customer=${customerId} → FREE`)
+  await updateUserPlan(customerId, 'FREE')
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const customerId = typeof invoice.customer === 'string' ? invoice.customer : null
+  if (!customerId) return
+
+  const attemptCount = invoice.attempt_count ?? 0
+  console.log(`[Webhook] invoice.payment_failed: customer=${customerId}, attempt=${attemptCount}`)
+
+  // After 3 failed attempts, downgrade to FREE
+  if (attemptCount >= 3) {
+    console.log(`[Webhook] 3+ failed payments for ${customerId} → downgrading to FREE`)
+    await updateUserPlan(customerId, 'FREE')
+  }
 }
 
 export async function POST(req: Request) {
+  if (!stripe) {
+    console.error('[Webhook] Stripe not initialized')
+    return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
+  }
+
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-  if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+  // Log for debugging
+  console.log(`[Webhook] Received event. Sig: ${sig ? 'present' : 'missing'}, Secret: ${webhookSecret ? 'configured' : 'MISSING'}`)
+
+  if (!sig || !webhookSecret) {
+    console.error('[Webhook] Missing signature or webhook secret')
     return NextResponse.json({ error: 'Missing signature or secret' }, { status: 400 })
   }
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET)
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Webhook error'
-    console.error('Webhook signature verification failed:', message)
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error(`[Webhook] Signature verification FAILED: ${message}`)
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
+  console.log(`[Webhook] Event verified: ${event.type} (${event.id})`)
+
   try {
     switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
-        const userId = session.client_reference_id ?? session.metadata?.userId
-        const plan = session.metadata?.plan ?? 'STARTER'
-        const customerId = typeof session.customer === 'string' ? session.customer : null
-
-        if (userId) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: {
-              plan: plan as 'STARTER' | 'PRO' | 'AGENCY',
-              ...(customerId ? { stripeId: customerId } : {}),
-            },
-          })
-        }
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session)
         break
-      }
 
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription
-        const customerId = typeof subscription.customer === 'string' ? subscription.customer : null
-        if (!customerId) break
-
-        const priceId = subscription.items.data[0]?.price?.id
-        const plan = priceId ? await getPlanFromPriceId(priceId) : 'FREE'
-
-        if (subscription.status === 'active' || subscription.status === 'trialing') {
-          await prisma.user.updateMany({
-            where: { stripeId: customerId },
-            data: { plan: plan as 'FREE' | 'STARTER' | 'PRO' | 'AGENCY' },
-          })
-        }
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription)
         break
-      }
 
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription
-        const customerId = typeof subscription.customer === 'string' ? subscription.customer : null
-        if (!customerId) break
-
-        await prisma.user.updateMany({
-          where: { stripeId: customerId },
-          data: { plan: 'FREE' },
-        })
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
         break
-      }
+
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice)
+        break
 
       default:
-        // Ignore other events
-        break
+        console.log(`[Webhook] Unhandled event type: ${event.type}`)
     }
   } catch (err) {
-    console.error('Webhook handler error:', err)
-    return NextResponse.json({ error: 'Handler error' }, { status: 500 })
+    console.error(`[Webhook] Handler error for ${event.type}:`, err)
+    // Return 200 anyway to prevent Stripe from retrying endlessly
+    return NextResponse.json({ received: true, error: 'handler_error' })
   }
 
   return NextResponse.json({ received: true })
