@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Loader2, CheckCircle2, ExternalLink, Zap, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,8 +40,26 @@ const PLAN_DETAILS: Record<string, { icon: string; color: string; desc: string }
 export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: Props) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [activePlan, setActivePlan] = useState(currentPlan)
+  const searchParams = useSearchParams()
 
-  const planInfo = PLAN_DETAILS[currentPlan] ?? PLAN_DETAILS.FREE
+  useEffect(() => {
+    if (searchParams.get('success') === 'true' && activePlan === 'FREE') {
+      setSyncing(true)
+      fetch('/api/stripe/sync', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.synced && data.plan !== 'FREE') {
+            setActivePlan(data.plan)
+          }
+          setSyncing(false)
+        })
+        .catch(() => setSyncing(false))
+    }
+  }, [searchParams, activePlan])
+
+  const planInfo = PLAN_DETAILS[activePlan] ?? PLAN_DETAILS.FREE
 
   async function handleCheckout(planKey: string) {
     setLoadingPlan(planKey)
@@ -80,7 +99,7 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: P
             <div className="flex items-center gap-2">
               <span className="text-2xl">{planInfo.icon}</span>
               <div>
-                <p className="text-xl font-bold">{currentPlan}</p>
+                <p className="text-xl font-bold">{syncing ? "Synchronisation..." : activePlan}</p>
                 <p className="text-sm text-muted-foreground">{planInfo.desc}</p>
               </div>
             </div>
@@ -139,13 +158,13 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: P
       </div>
 
       {/* Plan options */}
-      {currentPlan === 'FREE' && (
+      {activePlan === 'FREE' && (
         <div>
           <h3 className="font-semibold mb-4">Choisir un plan</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Object.entries(plans).map(([key, plan]) => {
               const detail = PLAN_DETAILS[key] ?? PLAN_DETAILS.FREE
-              const isCurrent = key === currentPlan
+              const isCurrent = key === activePlan
               const isPro = key === 'PRO'
               return (
                 <div
