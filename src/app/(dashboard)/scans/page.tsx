@@ -37,6 +37,7 @@ export default async function ScansPage() {
   const brandsForForm = brands.map((b) => ({
     id: b.id,
     name: b.name,
+    domain: b.domain ?? null,
     keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
   }))
 

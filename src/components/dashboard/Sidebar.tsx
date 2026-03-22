@@ -7,9 +7,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   Search,
-  Users,
-  FileText,
-  Settings,
+  Building2,
   CreditCard,
   Menu,
   X,
@@ -21,11 +19,9 @@ import { Badge } from '@/components/ui/badge'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/settings', label: 'Mes Marques', icon: Building2 },
   { href: '/scans', label: 'Scans', icon: Search },
-  { href: '/competitors', label: 'Concurrents', icon: Users },
-  { href: '/reports', label: 'Rapports', icon: FileText },
-  { href: '/settings', label: 'Paramètres', icon: Settings },
-  { href: '/billing', label: 'Facturation', icon: CreditCard },
+  { href: '/billing', label: 'Abonnement', icon: CreditCard },
 ]
 
 const PLAN_BADGE: Record<string, string> = {

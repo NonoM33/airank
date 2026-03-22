@@ -14,6 +14,7 @@ interface Brand {
   name: string
   domain: string | null
   keywords: string[]
+  _count?: { scans: number }
 }
 
 interface Props {
@@ -41,8 +42,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
 
   // Form state
   const [name, setName] = useState('')
-  const [domain, setDomain] = useState('')
-  const [websiteUrl, setWebsiteUrl] = useState('')
+  const [siteUrl, setSiteUrl] = useState('') // combined URL field (sets domain + used for analyze)
   const [keywordInput, setKeywordInput] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
 
@@ -54,8 +54,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
   function openCreate() {
     setEditId(null)
     setName('')
-    setDomain('')
-    setWebsiteUrl('')
+    setSiteUrl('')
     setKeywords([])
     setKeywordInput('')
     setError('')
@@ -67,8 +66,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
   function openEdit(brand: Brand) {
     setEditId(brand.id)
     setName(brand.name)
-    setDomain(brand.domain ?? '')
-    setWebsiteUrl('')
+    setSiteUrl(brand.domain ? `https://${brand.domain}` : '')
     setKeywords(brand.keywords)
     setKeywordInput('')
     setError('')
@@ -78,14 +76,14 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
   }
 
   async function handleAnalyze() {
-    if (!websiteUrl.trim()) return
+    if (!siteUrl.trim()) return
     setAnalyzeError('')
     setAnalyzing(true)
     try {
       const res = await fetch('/api/analyze-site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: websiteUrl.trim() }),
+        body: JSON.stringify({ url: siteUrl.trim() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -112,17 +110,27 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
     setKeywords(keywords.filter((k) => k !== kw))
   }
 
+  function extractDomain(url: string): string | undefined {
+    try {
+      const u = new URL(url.startsWith('http') ? url : `https://${url}`)
+      return u.hostname.replace(/^www\./, '')
+    } catch {
+      return url || undefined
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
+    const domain = siteUrl ? extractDomain(siteUrl) : undefined
     try {
       const apiUrl = editId ? `/api/brands/${editId}` : '/api/brands'
       const method = editId ? 'PUT' : 'POST'
       const res = await fetch(apiUrl, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, domain: domain || undefined, keywords }),
+        body: JSON.stringify({ name, domain, keywords }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -131,9 +139,9 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
         return
       }
       if (editId) {
-        setBrands(brands.map((b) => (b.id === editId ? { ...b, name, domain: domain || null, keywords } : b)))
+        setBrands(brands.map((b) => (b.id === editId ? { ...b, name, domain: domain ?? null, keywords } : b)))
       } else {
-        setBrands([...brands, { id: data.id, name, domain: domain || null, keywords }])
+        setBrands([...brands, { id: data.id, name, domain: domain ?? null, keywords }])
       }
       setShowForm(false)
       router.refresh()
@@ -147,11 +155,12 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
     if (!name.trim() || keywords.length === 0) return
     setError('')
     setLoading(true)
+    const domain = siteUrl ? extractDomain(siteUrl) : undefined
     try {
       const brandRes = await fetch('/api/brands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, domain: domain || undefined, keywords }),
+        body: JSON.stringify({ name, domain, keywords }),
       })
       const brandData = await brandRes.json()
       if (!brandRes.ok) {
@@ -159,7 +168,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
         setLoading(false)
         return
       }
-      setBrands([...brands, { id: brandData.id, name, domain: domain || null, keywords }])
+      setBrands([...brands, { id: brandData.id, name, domain: domain ?? null, keywords }])
       setShowForm(false)
       setScanningBrandId(brandData.id)
       await Promise.allSettled(
@@ -273,46 +282,35 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium flex items-center gap-1.5">
                   <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                  Domaine
-                </label>
-                <Input
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="Ex: acme.fr"
-                />
-              </div>
-            </div>
-
-            {/* URL Analyzer — create only */}
-            {!editId && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  Site web
-                  <span className="text-xs text-muted-foreground font-normal">
-                    — génère les requêtes automatiquement
-                  </span>
+                  URL du site
+                  {!editId && (
+                    <span className="text-xs text-muted-foreground font-normal">
+                      — génère les requêtes auto
+                    </span>
+                  )}
                 </label>
                 <div className="flex gap-2">
                   <Input
-                    value={websiteUrl}
-                    onChange={(e) => setWebsiteUrl(e.target.value)}
-                    placeholder="Ex: https://acme.fr"
+                    value={siteUrl}
+                    onChange={(e) => setSiteUrl(e.target.value)}
+                    placeholder="https://acme.fr"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAnalyze}
-                    disabled={!websiteUrl.trim() || analyzing}
-                    className="shrink-0 gap-1.5"
-                  >
-                    {analyzing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    {analyzing ? 'Analyse...' : 'Analyser'}
-                  </Button>
+                  {!editId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAnalyze}
+                      disabled={!siteUrl.trim() || analyzing}
+                      className="shrink-0 gap-1.5"
+                    >
+                      {analyzing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      {analyzing ? 'Analyse...' : 'Analyser'}
+                    </Button>
+                  )}
                 </div>
                 {analyzeError && <p className="text-xs text-destructive">{analyzeError}</p>}
                 {analysisResult && (
@@ -322,7 +320,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-1.5">
@@ -403,47 +401,18 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {brands.map((brand) => (
-            <div key={brand.id} className="card-glow rounded-xl border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-4">
+            <div key={brand.id} className="card-glow rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
+              {/* Brand header */}
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-semibold">{brand.name}</p>
-                    {brand.domain && (
-                      <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
-                        {brand.domain}
-                      </span>
-                    )}
-                  </div>
-                  {brand.keywords.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {brand.keywords.map((kw) => (
-                        <Badge key={kw} className="bg-secondary text-muted-foreground text-xs border border-border">
-                          {kw}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-1">Aucune requête configurée</p>
+                  <p className="font-semibold truncate">{brand.name}</p>
+                  {brand.domain && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{brand.domain}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {brand.keywords.length > 0 && (
-                    <Button
-                      size="sm"
-                      onClick={() => handleScanAll(brand)}
-                      disabled={scanningBrandId === brand.id}
-                      className="h-8 px-2.5 text-xs gap-1.5"
-                    >
-                      {scanningBrandId === brand.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <ScanLine className="h-3.5 w-3.5" />
-                      )}
-                      {scanningBrandId === brand.id ? 'Scan...' : 'Scanner tout'}
-                    </Button>
-                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -462,6 +431,44 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+              </div>
+
+              {/* Keywords */}
+              {brand.keywords.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {brand.keywords.map((kw) => (
+                    <Badge key={kw} className="bg-secondary text-muted-foreground text-xs border border-border">
+                      {kw}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Aucune requête configurée</p>
+              )}
+
+              {/* Stats + Scanner */}
+              <div className="flex items-center justify-between gap-3 pt-1 border-t border-border">
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{brand.keywords.length}</span> requête{brand.keywords.length !== 1 ? 's' : ''}
+                  {brand._count?.scans != null && (
+                    <> · <span className="font-medium text-foreground">{brand._count.scans}</span> scan{brand._count.scans !== 1 ? 's' : ''}</>
+                  )}
+                </div>
+                {brand.keywords.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={() => handleScanAll(brand)}
+                    disabled={scanningBrandId === brand.id}
+                    className="h-9 gap-1.5"
+                  >
+                    {scanningBrandId === brand.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ScanLine className="h-3.5 w-3.5" />
+                    )}
+                    {scanningBrandId === brand.id ? 'Scan en cours...' : 'Scanner'}
+                  </Button>
+                )}
               </div>
             </div>
           ))}

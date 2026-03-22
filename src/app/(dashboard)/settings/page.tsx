@@ -24,8 +24,8 @@ export default async function SettingsPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Paramètres</h1>
-        <p className="text-muted-foreground">Gérez vos marques et requêtes de scan</p>
+        <h1 className="text-2xl font-bold">Mes Marques</h1>
+        <p className="text-muted-foreground">Gérez vos marques et lancez des scans</p>
       </div>
 
       <BrandManager

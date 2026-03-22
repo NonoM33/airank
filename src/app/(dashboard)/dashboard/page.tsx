@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
 import { DashboardOnboarding } from '@/components/dashboard/DashboardOnboarding'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
+import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
 import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -117,6 +118,7 @@ export default async function DashboardPage() {
   const brandsForForm = allBrands.map((b) => ({
     id: b.id,
     name: b.name,
+    domain: b.domain ?? null,
     keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
   }))
 
@@ -186,11 +188,11 @@ export default async function DashboardPage() {
             <span className="text-foreground font-medium">{brand.name}</span>
           </p>
         </div>
-        <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
+        <DashboardScanButton brand={brandsForForm[0]} />
       </div>
 
       {/* Score + LLM cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
         <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center">
           <Badge className={`text-xs mb-3 ${scoreInfo.color}`}>{scoreInfo.label}</Badge>
           <p className={`text-6xl font-bold font-mono leading-none ${getScoreColor(globalScore)}`}>
