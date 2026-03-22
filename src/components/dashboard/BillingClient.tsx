@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, CheckCircle2, ExternalLink, Zap, Crown } from 'lucide-react'
+import { Loader2, CheckCircle2, ExternalLink, Zap, Crown, Coins } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -14,7 +14,7 @@ interface PlanInfo {
 
 interface Limits {
   brands: number
-  scansPerDay: number
+  credits: number
   llms: number
   historyDays: number
   pdfExport: boolean
@@ -22,12 +22,21 @@ interface Limits {
   apiAccess: boolean
 }
 
+interface CreditUsageEntry {
+  id: string
+  action: string
+  amount: number
+  details: string | null
+  createdAt: string
+}
+
 interface Props {
   currentPlan: string
   stripeId: string | null
   limits: Limits
-  usage: { todayScans: number; brandCount: number }
+  usage: { brandCount: number; credits: number }
   plans: Record<string, PlanInfo>
+  creditUsage: CreditUsageEntry[]
 }
 
 const PLAN_DETAILS: Record<string, { icon: string; color: string; desc: string }> = {
@@ -37,7 +46,20 @@ const PLAN_DETAILS: Record<string, { icon: string; color: string; desc: string }
   AGENCY: { icon: '🏢', color: 'text-purple-400', desc: 'Pour les agences SEO' },
 }
 
-export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: Props) {
+const CREDIT_PACKS = [
+  { label: '50 crédits', credits: 50, price: 9 },
+  { label: '200 crédits', credits: 200, price: 29 },
+  { label: '500 crédits', credits: 500, price: 59 },
+]
+
+const ACTION_LABELS: Record<string, string> = {
+  scan: 'Scan',
+  competitor_analysis: 'Analyse concurrentielle',
+  content_generation: 'Génération de contenu',
+  auto_scan: 'Scan automatique',
+}
+
+export function BillingClient({ currentPlan, stripeId, limits, usage, plans, creditUsage }: Props) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -130,19 +152,16 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: P
             <p className="text-2xl font-bold font-mono">
               {usage.brandCount}
               <span className="text-muted-foreground text-base font-normal">
-                /{limits.brands === 0 ? '∞' : limits.brands}
+                /{limits.brands}
               </span>
             </p>
             <p className="text-xs text-muted-foreground mt-1">Marques</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold font-mono">
-              {usage.todayScans}
-              <span className="text-muted-foreground text-base font-normal">
-                /{limits.scansPerDay === 0 ? '∞' : limits.scansPerDay}
-              </span>
+            <p className="text-2xl font-bold font-mono text-primary">
+              {usage.credits}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Scans aujourd&apos;hui</p>
+            <p className="text-xs text-muted-foreground mt-1">Crédits restants</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold font-mono">{limits.llms}</p>
@@ -154,6 +173,42 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: P
             </p>
             <p className="text-xs text-muted-foreground mt-1">Jours d&apos;historique</p>
           </div>
+        </div>
+      </div>
+
+      {/* Credit packs */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Coins className="h-5 w-5 text-primary" />
+          <h3 className="font-semibold">Recharges de crédits</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {CREDIT_PACKS.map((pack) => (
+            <div
+              key={pack.credits}
+              className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3"
+            >
+              <div>
+                <p className="font-semibold text-primary">{pack.label}</p>
+                <p className="text-2xl font-bold mt-1">
+                  {pack.price}€
+                  <span className="text-sm text-muted-foreground font-normal"> HT</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(pack.price / pack.credits * 100).toFixed(1)} cts / crédit
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5"
+                onClick={() => alert('Recharges Stripe à intégrer')}
+              >
+                <Zap className="h-4 w-4" />
+                Acheter
+              </Button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -228,6 +283,51 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans }: P
           ))}
         </div>
       </div>
+
+      {/* Credit usage history */}
+      {creditUsage.length > 0 && (
+        <div className="card-glow rounded-xl border border-border bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border">
+            <h3 className="font-semibold">Historique des crédits</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Détails</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">Date</th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Crédits</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {creditUsage.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-secondary/30 transition-colors">
+                    <td className="px-6 py-3">
+                      <span className="text-sm font-medium">{ACTION_LABELS[entry.action] ?? entry.action}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      <span className="text-sm text-muted-foreground truncate max-w-xs block">{entry.details ?? '—'}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(entry.createdAt).toLocaleDateString('fr-FR', {
+                          day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <span className={`font-mono font-bold text-sm ${entry.amount < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {entry.amount > 0 ? '+' : ''}{entry.amount}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

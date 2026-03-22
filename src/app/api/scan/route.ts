@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { scanBrand } from '@/lib/scanner'
 import { calculateGlobalScore } from '@/lib/analysis'
+import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
 
 const scanSchema = z.object({
   brandId: z.string(),
@@ -30,6 +31,12 @@ export async function POST(req: Request) {
   })
   if (!brand) {
     return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
+  }
+
+  const ok = await useCredits(session.user.id, CREDIT_COSTS.scan, 'scan', `Scan ${brand.name}`)
+  if (!ok) {
+    const credits = await getCredits(session.user.id)
+    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
   }
 
   const results = await scanBrand(brand.name, query)

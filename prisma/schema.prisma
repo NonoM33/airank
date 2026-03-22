@@ -10,17 +10,20 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  password  String?
-  plan      Plan     @default(FREE)
-  stripeId  String?  @unique
-  brands    Brand[]
-  accounts  Account[]
-  sessions  Session[]
-  createdAt DateTime @default(now())
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String?
+  image          String?
+  password       String?
+  plan           Plan            @default(FREE)
+  credits        Int             @default(2)
+  stripeId       String?         @unique
+  brands         Brand[]
+  accounts       Account[]
+  sessions       Session[]
+  creditUsages   CreditUsage[]
+  scheduledScans ScheduledScan[]
+  createdAt      DateTime        @default(now())
 }
 
 model Account {
@@ -58,15 +61,16 @@ model VerificationToken {
 }
 
 model Brand {
-  id          String       @id @default(cuid())
-  name        String
-  domain      String?
-  keywords    String       @default("[]") // JSON array of strings
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
-  scans       Scan[]
-  competitors Competitor[]
-  createdAt   DateTime     @default(now())
+  id             String          @id @default(cuid())
+  name           String
+  domain         String?
+  keywords       String          @default("[]") // JSON array of strings
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  scans          Scan[]
+  competitors    Competitor[]
+  scheduledScans ScheduledScan[]
+  createdAt      DateTime        @default(now())
 }
 
 model Competitor {
@@ -97,6 +101,39 @@ model ScanResult {
   sentiment   Sentiment?
   competitors String    @default("[]") // JSON array of strings
   rawResponse String
+}
+
+model CreditUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  action    String   // "scan" | "competitor_analysis" | "content_generation" | "auto_scan"
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model GeneratedContent {
+  id        String   @id @default(cuid())
+  userId    String
+  brandId   String
+  type      String   // "article" | "faq" | "press_release" | "comparison"
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model ScheduledScan {
+  id        String    @id @default(cuid())
+  brandId   String
+  brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  frequency String    // "weekly" | "biweekly" | "monthly"
+  nextRunAt DateTime
+  lastRunAt DateTime?
+  enabled   Boolean   @default(true)
+  createdAt DateTime  @default(now())
 }
 
 enum Plan {

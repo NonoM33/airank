@@ -35,15 +35,20 @@ interface SidebarProps {
   userName: string
   userEmail: string
   userPlan: string
+  credits: number
+  creditsMax: number
 }
 
 function SidebarInner({
   userName,
   userEmail,
   userPlan,
+  credits,
+  creditsMax,
   onClose,
 }: SidebarProps & { onClose?: () => void }) {
   const pathname = usePathname()
+  const pct = creditsMax > 0 ? Math.min(100, Math.round((credits / creditsMax) * 100)) : 0
 
   return (
     <div className="flex h-full flex-col bg-card border-r border-border">
@@ -82,6 +87,25 @@ function SidebarInner({
         })}
       </nav>
 
+      {/* Credits badge */}
+      <div className="mx-4 mb-3 p-3 rounded-lg bg-primary/5 border border-primary/10">
+        <div className="flex items-center justify-between text-xs mb-2">
+          <span className="text-muted-foreground">Crédits</span>
+          <span className="font-mono font-bold text-primary">{credits}</span>
+        </div>
+        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {credits < 5 && (
+          <Link href="/billing" className="block text-xs text-primary mt-1.5 hover:underline" onClick={onClose}>
+            Recharger →
+          </Link>
+        )}
+      </div>
+
       {/* User */}
       <div className="p-4 border-t border-border space-y-3">
         <div className="flex items-center gap-3">
@@ -98,7 +122,7 @@ function SidebarInner({
             {userPlan}
           </Badge>
           {userPlan === 'FREE' || userPlan === 'STARTER' ? (
-            <Link href="/billing" className="text-xs text-primary hover:underline">
+            <Link href="/billing" className="text-xs text-primary hover:underline" onClick={onClose}>
               Upgrader →
             </Link>
           ) : null}
@@ -117,7 +141,7 @@ function SidebarInner({
   )
 }
 
-export function Sidebar({ userName, userEmail, userPlan }: SidebarProps) {
+export function Sidebar({ userName, userEmail, userPlan, credits, creditsMax }: SidebarProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -155,13 +179,21 @@ export function Sidebar({ userName, userEmail, userPlan }: SidebarProps) {
           userName={userName}
           userEmail={userEmail}
           userPlan={userPlan}
+          credits={credits}
+          creditsMax={creditsMax}
           onClose={() => setOpen(false)}
         />
       </div>
 
       {/* Desktop sidebar */}
       <div className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col">
-        <SidebarInner userName={userName} userEmail={userEmail} userPlan={userPlan} />
+        <SidebarInner
+          userName={userName}
+          userEmail={userEmail}
+          userPlan={userPlan}
+          credits={credits}
+          creditsMax={creditsMax}
+        />
       </div>
     </>
   )

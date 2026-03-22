@@ -9,6 +9,7 @@ import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
 import { CompetitorRow } from '@/components/dashboard/CompetitorRow'
 import { generateRecommendations } from '@/lib/recommendations'
 import { getPlanLimits } from '@/lib/plan-limits'
+import { ScheduledScanSection } from '@/components/dashboard/ScheduledScanSection'
 
 // ─── Score helpers ─────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     try { return JSON.parse(brand.keywords) as string[] } catch { return [] }
   })()
 
-  const [allScans, allScanResults] = await Promise.all([
+  const [allScans, allScanResults, scheduledScan] = await Promise.all([
     prisma.scan.findMany({
       where: { brandId: brand.id },
       orderBy: { createdAt: 'desc' },
@@ -137,6 +138,9 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     prisma.scanResult.findMany({
       where: { scan: { brandId: brand.id } },
       select: { competitors: true, llm: true, scanId: true },
+    }),
+    prisma.scheduledScan.findFirst({
+      where: { brandId: brand.id, userId },
     }),
   ])
 
@@ -364,7 +368,19 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {/* ── Section E: Action Plan ─────────────────────────────────────────── */}
+      {/* ── Section E: Scheduled Scans ────────────────────────────────────── */}
+      <ScheduledScanSection
+        brandId={brand.id}
+        initial={scheduledScan ? {
+          id: scheduledScan.id,
+          frequency: scheduledScan.frequency,
+          nextRunAt: scheduledScan.nextRunAt.toISOString(),
+          lastRunAt: scheduledScan.lastRunAt?.toISOString() ?? null,
+          enabled: scheduledScan.enabled,
+        } : null}
+      />
+
+      {/* ── Section F: Action Plan ─────────────────────────────────────────── */}
       {recommendations.length > 0 && (
         <div className="space-y-6">
           <h2 className="text-lg font-bold">Plan d&apos;action recommandé</h2>

@@ -4,6 +4,7 @@ import { getPlanLimits } from '@/lib/plan-limits'
 import { queryOpenRouter } from '@/lib/scanner/openrouter'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
 
 const schema = z.object({
   competitorName: z.string().min(1).max(200),
@@ -33,6 +34,18 @@ export async function POST(req: Request) {
   }
 
   const { competitorName, brandName, industry } = parsed.data
+
+  const ok = await useCredits(
+    session.user.id,
+    CREDIT_COSTS.competitor_analysis,
+    'competitor_analysis',
+    `Analyse ${competitorName}`
+  )
+  if (!ok) {
+    const credits = await getCredits(session.user.id)
+    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  }
+
   const industryStr = industry || 'votre secteur'
 
   const prompt = `Analyse concurrentielle: ${competitorName} vs ${brandName} dans le secteur ${industryStr}.

@@ -10,20 +10,19 @@ export default async function BillingPage() {
   const userId = session!.user.id
   const plan = session!.user.plan ?? 'FREE'
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { stripeId: true, plan: true },
-  })
+  const [user, creditUsage] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeId: true, plan: true, credits: true },
+    }),
+    prisma.creditUsage.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ])
 
   const limits = getPlanLimits(plan)
-
-  // Count today's scans
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
-  const todayScans = await prisma.scan.count({
-    where: { brand: { userId }, createdAt: { gte: startOfDay } },
-  })
-
   const brandCount = await prisma.brand.count({ where: { userId } })
 
   return (
@@ -37,8 +36,15 @@ export default async function BillingPage() {
         currentPlan={plan}
         stripeId={user?.stripeId ?? null}
         limits={limits}
-        usage={{ todayScans, brandCount }}
+        usage={{ brandCount, credits: user?.credits ?? 0 }}
         plans={PLANS}
+        creditUsage={creditUsage.map((u) => ({
+          id: u.id,
+          action: u.action,
+          amount: u.amount,
+          details: u.details ?? null,
+          createdAt: u.createdAt.toISOString(),
+        }))}
       />
     </div>
   )

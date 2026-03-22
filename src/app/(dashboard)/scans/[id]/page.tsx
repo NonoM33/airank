@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react'
 import { generateRecommendations } from '@/lib/recommendations'
+import { ContentGenerateButton } from '@/components/dashboard/ContentGenerateButton'
 
 // ─── Score helpers ────────────────────────────────────────────────────────────
 
@@ -166,6 +167,10 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
     scan.brand.name,
     scan.brand.domain
   )
+
+  const brandId = scan.brand.id
+  const brandName = scan.brand.name
+  const brandDomain = scan.brand.domain
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
@@ -380,13 +385,32 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
                       </li>
                     ))}
                   </ul>
-                  <div className="flex flex-wrap gap-3 pt-2 border-t border-white/5">
+                  <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/5">
                     <span className="text-xs text-muted-foreground">
                       <span className="text-foreground font-medium">Impact :</span> {rec.estimatedImpact}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       <span className="text-foreground font-medium">Résultats en :</span> {rec.timeToResult}
                     </span>
+                    {rec.title.toLowerCase().includes('article') || rec.title.toLowerCase().includes('contenu') ? (
+                      <ContentGenerateButton
+                        brandId={brandId}
+                        brandName={brandName}
+                        type="article"
+                        context={{ industry: brandDomain ?? undefined }}
+                        label="✨ Générer l'article"
+                        cost={3}
+                      />
+                    ) : rec.title.toLowerCase().includes('faq') ? (
+                      <ContentGenerateButton
+                        brandId={brandId}
+                        brandName={brandName}
+                        type="faq"
+                        context={{ industry: brandDomain ?? undefined }}
+                        label="✨ Générer la FAQ"
+                        cost={2}
+                      />
+                    ) : null}
                   </div>
                 </div>
               </div>
