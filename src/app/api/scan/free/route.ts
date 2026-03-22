@@ -7,8 +7,15 @@ const freeScanSchema = z.object({
   brand: z.string().min(1).max(100).trim(),
 })
 
-// Simple in-memory rate limiter: max 1 request per brand per minute
-const rateLimitMap = new Map<string, number>()
+// IP-based rate limiter: max 3 requests per IP per day
+const ipRateLimitMap = new Map<string, { count: number; resetAt: number }>()
+const MAX_FREE_SCANS_PER_DAY = 3
+
+function getClientIp(req: Request): string {
+  const xff = req.headers.get('x-forwarded-for')
+  if (xff) return xff.split(',')[0].trim()
+  return 'unknown'
+}
 
 export async function POST(req: Request) {
   const body = await req.json()
@@ -18,22 +25,29 @@ export async function POST(req: Request) {
   }
 
   const { brand } = parsed.data
-  const key = brand.toLowerCase()
+  const ip = getClientIp(req)
   const now = Date.now()
-  const last = rateLimitMap.get(key) ?? 0
+  const startOfDay = new Date()
+  startOfDay.setHours(0, 0, 0, 0)
+  const resetAt = startOfDay.getTime() + 24 * 60 * 60 * 1000
 
-  if (now - last < 60_000) {
-    return NextResponse.json(
-      { error: 'Trop de requêtes. Attendez 1 minute avant de rescanner.' },
-      { status: 429 }
-    )
+  const entry = ipRateLimitMap.get(ip)
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= MAX_FREE_SCANS_PER_DAY) {
+      return NextResponse.json(
+        { error: `Limite atteinte : ${MAX_FREE_SCANS_PER_DAY} scans gratuits par jour. Créez un compte pour continuer.` },
+        { status: 429 }
+      )
+    }
+    ipRateLimitMap.set(ip, { count: entry.count + 1, resetAt: entry.resetAt })
+  } else {
+    ipRateLimitMap.set(ip, { count: 1, resetAt })
   }
-  rateLimitMap.set(key, now)
 
-  // Clean up old entries
-  if (rateLimitMap.size > 1000) {
-    for (const [k, t] of rateLimitMap.entries()) {
-      if (now - t > 120_000) rateLimitMap.delete(k)
+  // Clean up old entries periodically
+  if (ipRateLimitMap.size > 2000) {
+    for (const [k, v] of ipRateLimitMap.entries()) {
+      if (now > v.resetAt) ipRateLimitMap.delete(k)
     }
   }
 
