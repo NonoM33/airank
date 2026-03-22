@@ -17,9 +17,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL="file:./prisma/dev.db"
 
 # Generate Prisma client
 RUN pnpm prisma generate
+
+# Create database and run migrations
+RUN pnpm prisma db push
 
 # Build Next.js
 RUN pnpm build
@@ -41,15 +45,22 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma schema and generated client
+# Copy Prisma schema, generated client, and database
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Create data directory with proper permissions
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 USER nextjs
+
+ENV DATABASE_URL="file:/app/data/airank.db"
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+COPY --from=builder /app/docker-entrypoint.sh ./
+CMD ["sh", "docker-entrypoint.sh"]
