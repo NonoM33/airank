@@ -42,15 +42,19 @@ const LLM_LABELS: Record<string, string> = {
   GEMINI: 'Gemini',
 }
 
+const LLM_SHORT: Record<string, string> = {
+  CHATGPT: 'GPT',
+  CLAUDE: 'CLD',
+  PERPLEXITY: 'PPX',
+  GEMINI: 'GEM',
+}
+
 function computeChartData(
   scans: { createdAt: Date; globalScore: number }[]
 ): { date: string; score: number }[] {
   const byDate = new Map<string, number[]>()
   for (const scan of scans) {
-    const key = scan.createdAt.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-    })
+    const key = scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
     const arr = byDate.get(key) ?? []
     arr.push(scan.globalScore)
     byDate.set(key, arr)
@@ -70,6 +74,8 @@ export default async function DashboardPage() {
     orderBy: { createdAt: 'asc' },
   })
 
+  // ── 0 brands: onboarding ───────────────────────────────────────────────────
+
   if (allBrands.length === 0) {
     return (
       <div className="p-6 lg:p-8 space-y-8">
@@ -77,8 +83,6 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Bienvenue sur AIRank</p>
         </div>
-
-        {/* Teaser score cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <div className="col-span-2 sm:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center opacity-30">
             <p className="text-5xl font-bold font-mono text-muted-foreground">—</p>
@@ -92,8 +96,6 @@ export default async function DashboardPage() {
             </div>
           ))}
         </div>
-
-        {/* Onboarding card */}
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
           <div className="max-w-2xl">
             <div className="flex items-center gap-3 mb-5">
@@ -113,6 +115,155 @@ export default async function DashboardPage() {
       </div>
     )
   }
+
+  // ── 2+ brands: multi-brand grid ────────────────────────────────────────────
+
+  if (allBrands.length > 1) {
+    const brandsWithData = await Promise.all(
+      allBrands.map(async (brand) => {
+        const keywords: string[] = (() => {
+          try { return JSON.parse(brand.keywords) as string[] } catch { return [] }
+        })()
+        const [latestScan, competitorRows] = await Promise.all([
+          prisma.scan.findFirst({
+            where: { brandId: brand.id },
+            orderBy: { createdAt: 'desc' },
+            include: { results: { select: { llm: true, mentioned: true } } },
+          }),
+          prisma.scanResult.findMany({
+            where: { scan: { brandId: brand.id } },
+            select: { competitors: true },
+            orderBy: { id: 'desc' },
+            take: 30,
+          }),
+        ])
+        const competitorMap = new Map<string, number>()
+        for (const row of competitorRows) {
+          try {
+            for (const c of JSON.parse(row.competitors) as string[]) {
+              if (c.trim()) competitorMap.set(c, (competitorMap.get(c) ?? 0) + 1)
+            }
+          } catch { /* skip */ }
+        }
+        const topCompetitors = Array.from(competitorMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name]) => name)
+        return { brand, latestScan, topCompetitors, keywords }
+      })
+    )
+
+    return (
+      <div className="p-6 lg:p-8 space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Visibilité IA de vos{' '}
+              <span className="text-foreground font-medium">{allBrands.length} marques</span>
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1.5 text-sm border border-border rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+          >
+            Gérer les marques
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {brandsWithData.map(({ brand, latestScan, topCompetitors, keywords }) => {
+            const score = latestScan?.globalScore ?? null
+            const scoreInfo = score !== null ? getScoreLabel(score) : null
+            const llmStatuses = ['CHATGPT', 'CLAUDE', 'PERPLEXITY', 'GEMINI'].map((llm) => {
+              if (!latestScan) return { llm, status: 'no-scan' as const }
+              const r = latestScan.results.find((r) => r.llm === llm)
+              if (!r) return { llm, status: 'no-scan' as const }
+              return { llm, status: r.mentioned ? ('mentioned' as const) : ('not-mentioned' as const) }
+            })
+
+            return (
+              <div key={brand.id} className="card-glow rounded-xl bg-card border border-border p-5 flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate">{brand.name}</p>
+                    {brand.domain && (
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{brand.domain}</p>
+                    )}
+                  </div>
+                  {scoreInfo && score !== null && (
+                    <Badge className={`shrink-0 text-xs ${scoreInfo.color}`}>{scoreInfo.label}</Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-center shrink-0">
+                    <p className={`text-5xl font-bold font-mono leading-none ${score !== null ? getScoreColor(score) : 'text-muted-foreground'}`}>
+                      {score !== null ? score : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">/ 100</p>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {llmStatuses.map(({ llm, status }) => (
+                        <div key={llm} className="flex flex-col items-center gap-1">
+                          <div className={`h-2.5 w-2.5 rounded-full ${
+                            status === 'mentioned' ? 'bg-green-400' :
+                            status === 'not-mentioned' ? 'bg-red-400' :
+                            'bg-zinc-700'
+                          }`} />
+                          <span className="text-[9px] text-muted-foreground font-mono">{LLM_SHORT[llm]}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {latestScan ? (
+                      <p className="text-xs text-muted-foreground">
+                        {latestScan.createdAt.toLocaleDateString('fr-FR', {
+                          day: '2-digit', month: '2-digit', year: '2-digit',
+                        })}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">Aucun scan</p>
+                    )}
+                  </div>
+                </div>
+
+                {topCompetitors.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1.5">Concurrents IA :</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {topCompetitors.map((name) => (
+                        <span
+                          key={name}
+                          className="text-xs bg-secondary border border-border rounded px-2 py-0.5 text-muted-foreground"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2 border-t border-border mt-auto">
+                  <DashboardScanButton
+                    brand={{ id: brand.id, name: brand.name, keywords, domain: brand.domain ?? null }}
+                  />
+                  <Link
+                    href={`/brands/${brand.id}`}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-2 hover:border-primary/50 transition-colors whitespace-nowrap"
+                  >
+                    Détails <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── 1 brand: single detailed view ─────────────────────────────────────────
 
   const brand = allBrands[0]
   const brandsForForm = allBrands.map((b) => ({
@@ -188,7 +339,15 @@ export default async function DashboardPage() {
             <span className="text-foreground font-medium">{brand.name}</span>
           </p>
         </div>
-        <DashboardScanButton brand={brandsForForm[0]} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/brands/${brand.id}`}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-2 hover:border-primary/50 transition-colors"
+          >
+            Analyse détaillée <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <DashboardScanButton brand={brandsForForm[0]} />
+        </div>
       </div>
 
       {/* Score + LLM cards */}
@@ -232,7 +391,6 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* No scans yet — show big CTA */}
       {recentScans.length === 0 && (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8 text-center">
           <p className="text-muted-foreground mb-1">Aucune analyse pour le moment.</p>
@@ -243,7 +401,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Evolution chart */}
       {chartData.length > 0 && (
         <div className="card-glow rounded-xl bg-card border border-border p-6">
           <h2 className="text-base font-semibold mb-4">Évolution sur 30 jours</h2>
@@ -253,10 +410,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Recent scans + Competitors */}
       {recentScans.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent scans */}
           <div className="card-glow rounded-xl bg-card border border-border">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="text-base font-semibold">Dernières analyses</h2>
@@ -296,7 +451,6 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Competitor ranking */}
           <div className="card-glow rounded-xl bg-card border border-border">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-base font-semibold">Concurrents détectés par l&apos;IA</h2>

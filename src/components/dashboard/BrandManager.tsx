@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe, Zap, Sparkles, ScanLine,
+  Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe, Zap, Sparkles, ScanLine, BarChart2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
 
 interface Brand {
   id: string
@@ -446,29 +447,41 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                 <p className="text-xs text-muted-foreground">Aucune requête configurée</p>
               )}
 
-              {/* Stats + Scanner */}
-              <div className="flex items-center justify-between gap-3 pt-1 border-t border-border">
+              {/* Stats + Actions */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
                 <div className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">{brand.keywords.length}</span> requête{brand.keywords.length !== 1 ? 's' : ''}
                   {brand._count?.scans != null && (
                     <> · <span className="font-medium text-foreground">{brand._count.scans}</span> scan{brand._count.scans !== 1 ? 's' : ''}</>
                   )}
                 </div>
-                {brand.keywords.length > 0 && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleScanAll(brand)}
-                    disabled={scanningBrandId === brand.id}
-                    className="h-9 gap-1.5"
-                  >
-                    {scanningBrandId === brand.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <ScanLine className="h-3.5 w-3.5" />
-                    )}
-                    {scanningBrandId === brand.id ? 'Scan en cours...' : 'Scanner'}
-                  </Button>
-                )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Link href={`/brands/${brand.id}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <BarChart2 className="h-3.5 w-3.5" />
+                      Détails
+                    </Button>
+                  </Link>
+                  {brand.keywords.length > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleScanAll(brand)}
+                      disabled={scanningBrandId === brand.id}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      {scanningBrandId === brand.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ScanLine className="h-3.5 w-3.5" />
+                      )}
+                      {scanningBrandId === brand.id ? 'Scan...' : 'Scanner'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

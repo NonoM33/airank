@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight } from 'lucide-react'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
+import { BrandFilter } from '@/components/dashboard/BrandFilter'
 
 function getScoreColor(score: number) {
   if (score >= 70) return 'text-green-400'
@@ -12,20 +13,19 @@ function getScoreColor(score: number) {
   return 'text-red-400'
 }
 
-function getScoreBg(score: number) {
-  if (score >= 70) return 'bg-green-500/10 border-green-500/20'
-  if (score >= 40) return 'bg-amber-500/10 border-amber-500/20'
-  return 'bg-red-500/10 border-red-500/20'
-}
-
-const LLM_ICONS: Record<string, string> = {
+const LLM_SHORT: Record<string, string> = {
   CHATGPT: 'GPT',
   CLAUDE: 'CLD',
   PERPLEXITY: 'PPX',
   GEMINI: 'GEM',
 }
 
-export default async function ScansPage() {
+export default async function ScansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ brand?: string }>
+}) {
+  const { brand: brandFilter } = await searchParams
   const session = await auth()
   const userId = session!.user.id
 
@@ -59,17 +59,24 @@ export default async function ScansPage() {
     )
   }
 
-  const brand = brands[0]
+  // Determine active brand for filter
+  const activeBrand = brandFilter
+    ? (brands.find((b) => b.id === brandFilter) ?? null)
+    : null
 
+  // Fetch scans — filtered by brand or all brands
   const scans = await prisma.scan.findMany({
-    where: { brandId: brand.id },
+    where: activeBrand
+      ? { brandId: activeBrand.id }
+      : { brand: { userId } },
     orderBy: { createdAt: 'desc' },
     include: {
-      results: {
-        select: { llm: true, mentioned: true, position: true },
-      },
+      brand: { select: { id: true, name: true } },
+      results: { select: { llm: true, mentioned: true, position: true } },
     },
   })
+
+  const defaultBrandId = activeBrand?.id ?? brands[0].id
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -77,20 +84,32 @@ export default async function ScansPage() {
         <div>
           <h1 className="text-2xl font-bold">Scans</h1>
           <p className="text-muted-foreground">
-            Historique des analyses pour{' '}
-            <span className="text-foreground font-medium">{brand.name}</span>
+            {activeBrand ? (
+              <>Analyses pour <span className="text-foreground font-medium">{activeBrand.name}</span></>
+            ) : brands.length > 1 ? (
+              'Toutes les analyses'
+            ) : (
+              <>Analyses pour <span className="text-foreground font-medium">{brands[0].name}</span></>
+            )}
           </p>
         </div>
-        <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
+        <div className="flex items-center gap-2">
+          {brands.length > 1 && (
+            <BrandFilter
+              brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+              activeBrandId={activeBrand?.id ?? null}
+            />
+          )}
+          <NewScanForm brands={brandsForForm} defaultBrandId={defaultBrandId} />
+        </div>
       </div>
 
-      {/* Inline scan form shown immediately when no scans yet */}
       {scans.length === 0 ? (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
           <p className="text-sm text-muted-foreground mb-6 text-center">
-            Aucun scan pour le moment. Lancez votre première analyse !
+            Aucun scan{activeBrand ? ` pour ${activeBrand.name}` : ''} pour le moment. Lancez votre première analyse !
           </p>
-          <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} startOpen />
+          <NewScanForm brands={brandsForForm} defaultBrandId={defaultBrandId} startOpen />
         </div>
       ) : (
         <div className="card-glow rounded-xl bg-card border border-border overflow-hidden">
@@ -101,6 +120,11 @@ export default async function ScansPage() {
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Requête
                   </th>
+                  {brands.length > 1 && !activeBrand && (
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">
+                      Marque
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
                     Date
                   </th>
@@ -117,7 +141,7 @@ export default async function ScansPage() {
                 {scans.map((scan) => {
                   const mentionCount = scan.results.filter((r) => r.mentioned).length
                   return (
-                    <tr key={scan.id} className="hover:bg-secondary/30 transition-colors group">
+                    <tr key={scan.id} className="hover:bg-secondary/30 transition-colors">
                       <td className="px-6 py-4">
                         <p className="text-sm font-medium max-w-xs truncate">{scan.query}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
@@ -126,6 +150,16 @@ export default async function ScansPage() {
                           })}
                         </p>
                       </td>
+                      {brands.length > 1 && !activeBrand && (
+                        <td className="px-4 py-4 hidden md:table-cell">
+                          <Link
+                            href={`/brands/${scan.brand.id}`}
+                            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            {scan.brand.name}
+                          </Link>
+                        </td>
+                      )}
                       <td className="px-4 py-4 hidden sm:table-cell">
                         <p className="text-sm text-muted-foreground whitespace-nowrap">
                           {scan.createdAt.toLocaleDateString('fr-FR', {
@@ -140,12 +174,10 @@ export default async function ScansPage() {
                             <Badge
                               key={r.llm}
                               className={`text-[10px] px-1.5 py-0 ${
-                                r.mentioned
-                                  ? 'bg-green-500/20 text-green-400'
-                                  : 'bg-zinc-800 text-zinc-500'
+                                r.mentioned ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-500'
                               }`}
                             >
-                              {LLM_ICONS[r.llm] ?? r.llm}
+                              {LLM_SHORT[r.llm] ?? r.llm}
                             </Badge>
                           ))}
                           <span className="text-xs text-muted-foreground ml-1">
