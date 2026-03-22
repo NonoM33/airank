@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe, Zap } from 'lucide-react'
+import {
+  Plus, Pencil, Trash2, X, Check, Loader2, Tag, Globe, Zap, Sparkles, ScanLine,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +22,14 @@ interface Props {
   plan: string
 }
 
+interface AnalysisResult {
+  businessName: string
+  industry: string
+  location: string | null
+  description: string
+  suggestedQueries: string[]
+}
+
 export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) {
   const router = useRouter()
   const [brands, setBrands] = useState(initialBrands)
@@ -27,50 +37,30 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  // Inline scan state
-  const [scanBrandId, setScanBrandId] = useState<string | null>(null)
-  const [scanQuery, setScanQuery] = useState('')
-  const [scanLoading, setScanLoading] = useState(false)
-  const [scanError, setScanError] = useState('')
-
-  async function handleQuickScan(e: React.FormEvent, brandId: string) {
-    e.preventDefault()
-    if (!scanQuery.trim()) return
-    setScanError('')
-    setScanLoading(true)
-    try {
-      const res = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, query: scanQuery.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setScanError(data.error || 'Erreur lors du scan.')
-        setScanLoading(false)
-        return
-      }
-      router.push(`/scans/${data.scan.id}`)
-    } catch {
-      setScanError('Une erreur est survenue.')
-      setScanLoading(false)
-    }
-  }
+  const [scanningBrandId, setScanningBrandId] = useState<string | null>(null)
 
   // Form state
   const [name, setName] = useState('')
   const [domain, setDomain] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
   const [keywordInput, setKeywordInput] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
+
+  // Analysis state (create flow only)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [analyzeError, setAnalyzeError] = useState('')
 
   function openCreate() {
     setEditId(null)
     setName('')
     setDomain('')
+    setWebsiteUrl('')
     setKeywords([])
     setKeywordInput('')
     setError('')
+    setAnalysisResult(null)
+    setAnalyzeError('')
     setShowForm(true)
   }
 
@@ -78,17 +68,43 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
     setEditId(brand.id)
     setName(brand.name)
     setDomain(brand.domain ?? '')
+    setWebsiteUrl('')
     setKeywords(brand.keywords)
     setKeywordInput('')
     setError('')
+    setAnalysisResult(null)
+    setAnalyzeError('')
     setShowForm(true)
+  }
+
+  async function handleAnalyze() {
+    if (!websiteUrl.trim()) return
+    setAnalyzeError('')
+    setAnalyzing(true)
+    try {
+      const res = await fetch('/api/analyze-site', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: websiteUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAnalyzeError(data.error || 'Analyse impossible.')
+        setAnalyzing(false)
+        return
+      }
+      setAnalysisResult(data)
+      if (!name.trim() && data.businessName) setName(data.businessName)
+      setKeywords(data.suggestedQueries ?? [])
+    } catch {
+      setAnalyzeError('Une erreur est survenue.')
+    }
+    setAnalyzing(false)
   }
 
   function addKeyword() {
     const kw = keywordInput.trim()
-    if (kw && !keywords.includes(kw)) {
-      setKeywords([...keywords, kw])
-    }
+    if (kw && !keywords.includes(kw)) setKeywords([...keywords, kw])
     setKeywordInput('')
   }
 
@@ -100,11 +116,10 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
-      const url = editId ? `/api/brands/${editId}` : '/api/brands'
+      const apiUrl = editId ? `/api/brands/${editId}` : '/api/brands'
       const method = editId ? 'PUT' : 'POST'
-      const res = await fetch(url, {
+      const res = await fetch(apiUrl, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, domain: domain || undefined, keywords }),
@@ -115,15 +130,49 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
         setLoading(false)
         return
       }
-
       if (editId) {
         setBrands(brands.map((b) => (b.id === editId ? { ...b, name, domain: domain || null, keywords } : b)))
       } else {
-        const newBrand = { id: data.id, name, domain: domain || null, keywords }
-        setBrands([...brands, newBrand])
+        setBrands([...brands, { id: data.id, name, domain: domain || null, keywords }])
       }
       setShowForm(false)
       router.refresh()
+    } catch {
+      setError('Une erreur est survenue.')
+    }
+    setLoading(false)
+  }
+
+  async function handleCreateAndScan() {
+    if (!name.trim() || keywords.length === 0) return
+    setError('')
+    setLoading(true)
+    try {
+      const brandRes = await fetch('/api/brands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, domain: domain || undefined, keywords }),
+      })
+      const brandData = await brandRes.json()
+      if (!brandRes.ok) {
+        setError(brandData.error || 'Erreur lors de la création.')
+        setLoading(false)
+        return
+      }
+      setBrands([...brands, { id: brandData.id, name, domain: domain || null, keywords }])
+      setShowForm(false)
+      setScanningBrandId(brandData.id)
+      await Promise.allSettled(
+        keywords.map((kw) =>
+          fetch('/api/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandId: brandData.id, query: kw }),
+          })
+        )
+      )
+      setScanningBrandId(null)
+      router.push('/scans')
     } catch {
       setError('Une erreur est survenue.')
     }
@@ -141,6 +190,24 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
       }
     } catch { /* ignore */ }
     setLoading(false)
+  }
+
+  async function handleScanAll(brand: Brand) {
+    if (brand.keywords.length === 0) return
+    setScanningBrandId(brand.id)
+    try {
+      await Promise.allSettled(
+        brand.keywords.map((kw) =>
+          fetch('/api/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandId: brand.id, query: kw }),
+          })
+        )
+      )
+      router.push('/scans')
+    } catch { /* ignore */ }
+    setScanningBrandId(null)
   }
 
   const canAdd = maxBrands === 0 ? false : brands.length < maxBrands
@@ -168,7 +235,6 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
         )}
       </div>
 
-      {/* Plan limit warning */}
       {!canAdd && maxBrands === 0 && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-400">
           Le plan Gratuit ne permet pas d&apos;ajouter de marques.{' '}
@@ -193,6 +259,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                 {error}
               </div>
             )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Nom de la marque *</label>
@@ -216,13 +283,54 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
               </div>
             </div>
 
+            {/* URL Analyzer — create only */}
+            {!editId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Site web
+                  <span className="text-xs text-muted-foreground font-normal">
+                    — génère les requêtes automatiquement
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="Ex: https://acme.fr"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAnalyze}
+                    disabled={!websiteUrl.trim() || analyzing}
+                    className="shrink-0 gap-1.5"
+                  >
+                    {analyzing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {analyzing ? 'Analyse...' : 'Analyser'}
+                  </Button>
+                </div>
+                {analyzeError && <p className="text-xs text-destructive">{analyzeError}</p>}
+                {analysisResult && (
+                  <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs">
+                    <p className="font-medium text-primary">{analysisResult.industry}</p>
+                    <p className="text-muted-foreground mt-0.5">{analysisResult.description}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-1.5">
                 <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                 Requêtes de scan
               </label>
               <p className="text-xs text-muted-foreground">
-                Entrez les requêtes que vos clients tapent dans ChatGPT, Perplexity, etc.
+                Ce que vos clients tapent dans ChatGPT, Perplexity, etc.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -240,10 +348,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
               {keywords.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {keywords.map((kw) => (
-                    <Badge
-                      key={kw}
-                      className="bg-secondary text-foreground border border-border gap-1.5 pr-1"
-                    >
+                    <Badge key={kw} className="bg-secondary text-foreground border border-border gap-1.5 pr-1">
                       {kw}
                       <button
                         type="button"
@@ -258,11 +363,26 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
               )}
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={loading} className="gap-1.5">
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button type="submit" disabled={loading} variant="outline" className="gap-1.5">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {editId ? 'Enregistrer' : 'Créer'}
+                {editId ? 'Enregistrer' : 'Créer la marque'}
               </Button>
+              {!editId && keywords.length > 0 && (
+                <Button
+                  type="button"
+                  disabled={loading || !name.trim()}
+                  onClick={handleCreateAndScan}
+                  className="gap-1.5"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  Créer et scanner ({keywords.length} requête{keywords.length > 1 ? 's' : ''})
+                </Button>
+              )}
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
                 Annuler
               </Button>
@@ -285,10 +405,7 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
       ) : (
         <div className="space-y-3">
           {brands.map((brand) => (
-            <div
-              key={brand.id}
-              className="card-glow rounded-xl border border-border bg-card p-5 space-y-0"
-            >
+            <div key={brand.id} className="card-glow rounded-xl border border-border bg-card p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -308,25 +425,25 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Aucune requête configurée
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Aucune requête configurée</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant={scanBrandId === brand.id ? 'default' : 'outline'}
-                    onClick={() => {
-                      setScanBrandId(scanBrandId === brand.id ? null : brand.id)
-                      setScanQuery(brand.keywords[0] ?? '')
-                      setScanError('')
-                    }}
-                    className="h-8 px-2.5 text-xs gap-1.5"
-                  >
-                    <Zap className="h-3.5 w-3.5" />
-                    Scanner
-                  </Button>
+                  {brand.keywords.length > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleScanAll(brand)}
+                      disabled={scanningBrandId === brand.id}
+                      className="h-8 px-2.5 text-xs gap-1.5"
+                    >
+                      {scanningBrandId === brand.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ScanLine className="h-3.5 w-3.5" />
+                      )}
+                      {scanningBrandId === brand.id ? 'Scan...' : 'Scanner tout'}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -346,45 +463,6 @@ export function BrandManager({ brands: initialBrands, maxBrands, plan }: Props) 
                   </Button>
                 </div>
               </div>
-
-              {/* Inline scan form */}
-              {scanBrandId === brand.id && (
-                <form
-                  onSubmit={(e) => handleQuickScan(e, brand.id)}
-                  className="mt-4 pt-4 border-t border-border flex gap-2 items-start flex-wrap"
-                >
-                  {scanError && (
-                    <p className="w-full text-xs text-destructive">{scanError}</p>
-                  )}
-                  <Input
-                    value={scanQuery}
-                    onChange={(e) => setScanQuery(e.target.value)}
-                    placeholder="Ex: meilleur logiciel CRM PME"
-                    disabled={scanLoading}
-                    className="flex-1 min-w-0 h-8 text-sm"
-                    required
-                  />
-                  <Button type="submit" size="sm" disabled={scanLoading || !scanQuery.trim()} className="h-8 gap-1.5">
-                    {scanLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                    {scanLoading ? 'Scan...' : 'Scanner'}
-                  </Button>
-                  {brand.keywords.length > 0 && (
-                    <div className="w-full flex flex-wrap gap-1 mt-1">
-                      {brand.keywords.slice(0, 5).map((kw) => (
-                        <button
-                          key={kw}
-                          type="button"
-                          onClick={() => setScanQuery(kw)}
-                          disabled={scanLoading}
-                          className="text-xs bg-secondary border border-border rounded-full px-2 py-0.5 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
-                        >
-                          {kw}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </form>
-              )}
             </div>
           ))}
         </div>

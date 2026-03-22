@@ -1,10 +1,69 @@
 import type { ScanResultData } from './index'
 
+interface AirankData {
+  mentioned: boolean
+  position: number | null
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | null
+  competitors: string[]
+}
+
+function parseAirankBlock(text: string): { data: AirankData; cleanText: string } | null {
+  const blockMatch = text.match(/---AIRANK_DATA---\n([\s\S]*?)\n?---END_AIRANK_DATA---/)
+  if (!blockMatch) return null
+
+  const block = blockMatch[1]
+  const cleanText = text.replace(/\n?---AIRANK_DATA---[\s\S]*?---END_AIRANK_DATA---/, '').trim()
+
+  const mentionedMatch = block.match(/mentioned:\s*(true|false)/i)
+  const mentioned = mentionedMatch ? mentionedMatch[1].toLowerCase() === 'true' : false
+
+  const positionMatch = block.match(/position:\s*(\d+|null)/i)
+  const position =
+    positionMatch && positionMatch[1].toLowerCase() !== 'null'
+      ? parseInt(positionMatch[1])
+      : null
+
+  const sentimentMatch = block.match(/sentiment:\s*(POSITIVE|NEUTRAL|NEGATIVE)/i)
+  const sentiment = sentimentMatch
+    ? (sentimentMatch[1].toUpperCase() as 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE')
+    : null
+
+  // Handle both "[A, B, C]" and "A, B, C" formats
+  const competitorsLine = block.match(/competitors:\s*\[?([^\]]*)\]?/)
+  let competitors: string[] = []
+  if (competitorsLine && competitorsLine[1].trim()) {
+    competitors = competitorsLine[1]
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'aucune' && s.length > 1)
+      .slice(0, 8)
+  }
+
+  return { data: { mentioned, position, sentiment, competitors }, cleanText }
+}
+
 export function parseResponse(
   rawResponse: string,
   brandName: string,
   llm: ScanResultData['llm']
 ): ScanResultData {
+  // Try structured block first
+  const parsed = parseAirankBlock(rawResponse)
+  if (parsed) {
+    const { data, cleanText } = parsed
+    const context = data.mentioned ? extractContext(cleanText, brandName) : null
+    return {
+      llm,
+      mentioned: data.mentioned,
+      position: data.position,
+      context,
+      sentiment: data.sentiment,
+      competitors: data.competitors,
+      rawResponse: cleanText,
+    }
+  }
+
+  // Fall back to regex parsing
   const mentioned = rawResponse.toLowerCase().includes(brandName.toLowerCase())
   const position = mentioned ? extractPosition(rawResponse, brandName) : null
   const context = mentioned ? extractContext(rawResponse, brandName) : null
@@ -17,25 +76,18 @@ export function parseResponse(
 function extractPosition(text: string, brandName: string): number | null {
   const brandLower = brandName.toLowerCase()
 
-  // Try numbered list items (1. or 1))
   const numberedLines = text.match(/^\s*\d+[.)]\s+.+$/gm) ?? []
   if (numberedLines.length > 1) {
-    const pos = numberedLines.findIndex((line) =>
-      line.toLowerCase().includes(brandLower)
-    )
+    const pos = numberedLines.findIndex((line) => line.toLowerCase().includes(brandLower))
     if (pos !== -1) return pos + 1
   }
 
-  // Try bullet list items (- or * or •)
   const bulletLines = text.match(/^\s*[-*•]\s+.+$/gm) ?? []
   if (bulletLines.length > 1) {
-    const pos = bulletLines.findIndex((line) =>
-      line.toLowerCase().includes(brandLower)
-    )
+    const pos = bulletLines.findIndex((line) => line.toLowerCase().includes(brandLower))
     if (pos !== -1) return pos + 1
   }
 
-  // Fallback: count bold items (**Name**) appearing before the brand
   const boldItems = [...text.matchAll(/\*\*([^*]+)\*\*/g)]
   if (boldItems.length > 0) {
     let count = 0
@@ -45,7 +97,6 @@ function extractPosition(text: string, brandName: string): number | null {
     }
   }
 
-  // Paragraph order fallback
   const paragraphs = text.split(/\n\n+/)
   for (let i = 0; i < paragraphs.length; i++) {
     if (paragraphs[i].toLowerCase().includes(brandLower)) return i + 1
@@ -57,7 +108,6 @@ function extractPosition(text: string, brandName: string): number | null {
 function extractContext(text: string, brandName: string): string {
   const brandLower = brandName.toLowerCase()
 
-  // Find the sentence or line containing the brand
   const lines = text.split('\n')
   for (const line of lines) {
     if (line.toLowerCase().includes(brandLower) && line.trim().length > 5) {
@@ -65,7 +115,6 @@ function extractContext(text: string, brandName: string): string {
     }
   }
 
-  // Fallback: extract ±150 chars around first mention
   const idx = text.toLowerCase().indexOf(brandLower)
   const start = Math.max(0, idx - 100)
   const end = Math.min(text.length, idx + 200)
@@ -112,7 +161,6 @@ function extractCompetitors(text: string, excludeBrand: string): string[] {
   const competitors = new Set<string>()
   const excludeLower = excludeBrand.toLowerCase()
 
-  // Extract from numbered list items: "1. **BrandName** ..."
   const numberedPattern = /^\s*\d+[.)]\s+\*?\*?([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜ][a-zA-ZÀ-ÿ0-9\s\-\.]{1,30})\*?\*?/gm
   for (const match of text.matchAll(numberedPattern)) {
     const name = match[1].trim().split(/\s+/).slice(0, 3).join(' ')
@@ -121,7 +169,6 @@ function extractCompetitors(text: string, excludeBrand: string): string[] {
     }
   }
 
-  // Extract bold items: **BrandName**
   for (const match of text.matchAll(/\*\*([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜ][a-zA-ZÀ-ÿ0-9\s\-\.]{1,30})\*\*/g)) {
     const name = match[1].trim()
     if (name.length > 1 && name.toLowerCase() !== excludeLower && isLikelyBrand(name)) {
@@ -129,7 +176,6 @@ function extractCompetitors(text: string, excludeBrand: string): string[] {
     }
   }
 
-  // Extract from bullet lists: "- **Name** ..." or "- Name:"
   const bulletPattern = /^\s*[-*•]\s+\*?\*?([A-ZÀÂÄÉÈÊËÎÏÔÙÛÜ][a-zA-ZÀ-ÿ0-9\s\-\.]{1,30})\*?\*?[\s:]/gm
   for (const match of text.matchAll(bulletPattern)) {
     const name = match[1].trim()
