@@ -1,9 +1,8 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { useInView } from 'framer-motion'
-import { useRef } from 'react'
-import { Check, Zap, Star } from 'lucide-react'
+import { motion, useInView } from 'framer-motion'
+import { useRef, useState } from 'react'
+import { Check, Zap, Star, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const plans = [
@@ -13,6 +12,7 @@ const plans = [
     period: null,
     description: 'Pour découvrir AIRank',
     badge: null,
+    planKey: null,
     features: [
       '1 scan de marque',
       'Score de visibilité basique',
@@ -29,6 +29,7 @@ const plans = [
     period: 'mois',
     description: 'Pour les indépendants',
     badge: null,
+    planKey: 'STARTER',
     features: [
       '1 marque suivie',
       '10 requêtes analysées / jour',
@@ -38,7 +39,7 @@ const plans = [
       'Dashboard complet',
     ],
     cta: 'Démarrer Starter',
-    href: '/signup?plan=starter',
+    href: null,
     highlighted: false,
   },
   {
@@ -47,17 +48,18 @@ const plans = [
     period: 'mois',
     description: 'Pour les équipes marketing',
     badge: 'Plus populaire',
+    planKey: 'PRO',
     features: [
       '3 marques suivies',
       '50 requêtes / jour',
       '4 LLMs (+ Claude)',
       'Historique 90 jours',
       'Rapports PDF export',
-      'Analyse concurrents (jusqu\'à 5)',
+      "Analyse concurrents (jusqu'à 5)",
       'Recommandations IA personnalisées',
     ],
     cta: 'Démarrer Pro',
-    href: '/signup?plan=pro',
+    href: null,
     highlighted: true,
   },
   {
@@ -66,6 +68,7 @@ const plans = [
     period: 'mois',
     description: 'Pour les agences SEO',
     badge: null,
+    planKey: 'AGENCY',
     features: [
       '10 marques',
       '200 requêtes / jour',
@@ -77,14 +80,37 @@ const plans = [
       'Multi-clients',
     ],
     cta: 'Démarrer Agency',
-    href: '/signup?plan=agency',
+    href: null,
     highlighted: false,
   },
 ]
 
+async function handleCheckout(planKey: string, setLoading: (k: string | null) => void) {
+  setLoading(planKey)
+  try {
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planKey }),
+    })
+    const data = await res.json()
+    if (data.url) {
+      window.location.href = data.url
+    } else if (res.status === 401) {
+      window.location.href = `/signup?plan=${planKey.toLowerCase()}`
+    } else {
+      window.location.href = `/signup?plan=${planKey.toLowerCase()}`
+    }
+  } catch {
+    window.location.href = `/signup?plan=${planKey.toLowerCase()}`
+  }
+  setLoading(null)
+}
+
 export function Pricing() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: '-50px' })
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
 
   return (
     <section id="pricing" className="py-24 px-4">
@@ -155,16 +181,33 @@ export function Pricing() {
                 ))}
               </ul>
 
-              <Link
-                href={plan.href}
-                className={`block text-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
-                  plan.highlighted
-                    ? 'bg-primary text-white hover:bg-primary/90 active:scale-95'
-                    : 'border border-border bg-background hover:bg-muted text-foreground active:scale-95'
-                }`}
-              >
-                {plan.cta}
-              </Link>
+              {plan.href ? (
+                <Link
+                  href={plan.href}
+                  className={`block text-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                    plan.highlighted
+                      ? 'bg-primary text-white hover:bg-primary/90 active:scale-95'
+                      : 'border border-border bg-background hover:bg-muted text-foreground active:scale-95'
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              ) : (
+                <button
+                  onClick={() => plan.planKey && handleCheckout(plan.planKey, setLoadingPlan)}
+                  disabled={loadingPlan === plan.planKey}
+                  className={`w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-70 ${
+                    plan.highlighted
+                      ? 'bg-primary text-white hover:bg-primary/90 active:scale-95'
+                      : 'border border-border bg-background hover:bg-muted text-foreground active:scale-95'
+                  }`}
+                >
+                  {loadingPlan === plan.planKey && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {plan.cta}
+                </button>
+              )}
             </motion.div>
           ))}
         </div>
