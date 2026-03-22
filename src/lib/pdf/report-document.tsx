@@ -231,8 +231,10 @@ export function ReportDocument({ brand, scans }: Props) {
           mentioned: r.mentioned,
           position: r.position,
           sentiment: r.sentiment,
+          competitors: r.competitors,
         })),
-        brand.name
+        brand.name,
+        brand.domain
       )
     : []
 
@@ -328,18 +330,26 @@ export function ReportDocument({ brand, scans }: Props) {
         {/* ── Recommendations ── */}
         {recommendations.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>Recommandations</Text>
-            {recommendations.slice(0, 4).map((rec, i) => {
+            <Text style={s.sectionTitle}>Plan d&apos;action</Text>
+            {recommendations.slice(0, 5).map((rec, i) => {
               const badgeColor = rec.priority === 'critical'
                 ? { bg: '#fee2e2', text: '#dc2626' }
                 : rec.priority === 'important'
                 ? { bg: '#fef3c7', text: '#d97706' }
                 : { bg: '#dcfce7', text: '#16a34a' }
+              const diffColor = rec.difficulty === 'facile'
+                ? { bg: '#dcfce7', text: '#16a34a' }
+                : rec.difficulty === 'moyen'
+                ? { bg: '#fef3c7', text: '#d97706' }
+                : { bg: '#fee2e2', text: '#dc2626' }
               return (
                 <View key={i} style={s.recCard}>
                   <View style={s.recHeader}>
                     <View style={[s.recBadge, { backgroundColor: badgeColor.bg }]}>
                       <Text style={{ color: badgeColor.text }}>{rec.priorityLabel.toUpperCase()}</Text>
+                    </View>
+                    <View style={[s.recBadge, { backgroundColor: diffColor.bg }]}>
+                      <Text style={{ color: diffColor.text }}>{rec.difficulty.toUpperCase()}</Text>
                     </View>
                     <Text style={s.recTitle}>{rec.title}</Text>
                   </View>
@@ -347,6 +357,9 @@ export function ReportDocument({ brand, scans }: Props) {
                   {rec.actions.slice(0, 3).map((action, j) => (
                     <Text key={j} style={s.recAction}>→ {action}</Text>
                   ))}
+                  <Text style={[s.recDesc, { marginTop: 4, fontFamily: 'Helvetica-Bold', color: '#3f3f46' }]}>
+                    Impact estimé : {rec.estimatedImpact} · Résultats en : {rec.timeToResult}
+                  </Text>
                 </View>
               )
             })}

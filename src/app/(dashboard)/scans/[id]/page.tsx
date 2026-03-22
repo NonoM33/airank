@@ -161,8 +161,10 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
       mentioned: r.mentioned,
       position: r.position,
       sentiment: r.sentiment,
+      competitors: r.competitors,
     })),
-    scan.brand.name
+    scan.brand.name,
+    scan.brand.domain
   )
 
   return (
@@ -340,42 +342,119 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
       )}
 
       {/* ── Section 4: Recommendations ────────────────────────────────────── */}
-      {recommendations.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-            Recommandations
-          </h2>
-          <div className="space-y-3">
-            {recommendations.map((rec, i) => (
-              <div
-                key={i}
-                className={`rounded-xl border p-5 ${PRIORITY_COLORS[rec.priority]}`}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-xl shrink-0 mt-0.5">{rec.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <Badge className={`text-xs ${PRIORITY_BADGE[rec.priority]}`}>
-                        {rec.priorityLabel}
-                      </Badge>
-                      <h3 className="font-semibold text-sm">{rec.title}</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">{rec.description}</p>
-                    <ul className="space-y-1">
-                      {rec.actions.map((action, j) => (
-                        <li key={j} className="text-xs text-muted-foreground flex items-start gap-2">
-                          <span className="shrink-0 mt-0.5 text-primary">→</span>
-                          {action}
-                        </li>
-                      ))}
-                    </ul>
+      {recommendations.length > 0 && (() => {
+        const quickWins = recommendations.filter(r => r.category === 'quick-win')
+        const cetteSmaine = recommendations.filter(r => r.category === 'cette-semaine')
+        const ceMois = recommendations.filter(r => r.category === 'ce-mois')
+
+        const DIFFICULTY_BADGE: Record<string, string> = {
+          facile: 'bg-green-500/20 text-green-400',
+          moyen: 'bg-amber-500/20 text-amber-400',
+          avancé: 'bg-red-500/20 text-red-400',
+        }
+
+        function RecCard({ rec, i }: { rec: (typeof recommendations)[0]; i: number }) {
+          return (
+            <div
+              key={i}
+              className={`rounded-xl border p-5 ${PRIORITY_COLORS[rec.priority]}`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-xl shrink-0 mt-0.5">{rec.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <Badge className={`text-xs ${PRIORITY_BADGE[rec.priority]}`}>
+                      {rec.priorityLabel}
+                    </Badge>
+                    <Badge className={`text-xs ${DIFFICULTY_BADGE[rec.difficulty]}`}>
+                      {rec.difficulty}
+                    </Badge>
+                    <h3 className="font-semibold text-sm">{rec.title}</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{rec.description}</p>
+                  <ul className="space-y-1 mb-3">
+                    {rec.actions.map((action, j) => (
+                      <li key={j} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <span className="shrink-0 mt-0.5 text-primary">→</span>
+                        {action}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap gap-3 pt-2 border-t border-white/5">
+                    <span className="text-xs text-muted-foreground">
+                      <span className="text-foreground font-medium">Impact :</span> {rec.estimatedImpact}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      <span className="text-foreground font-medium">Résultats en :</span> {rec.timeToResult}
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-8">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Plan d&apos;action
+            </h2>
+
+            {quickWins.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-base">⚡</span>
+                  <h3 className="text-sm font-semibold text-foreground">Quick Wins — 30 minutes</h3>
+                  <span className="text-xs text-muted-foreground">(impact rapide, effort minimal)</span>
+                </div>
+                <div className="space-y-3">
+                  {quickWins.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
+                </div>
+              </div>
+            )}
+
+            {cetteSmaine.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-base">📅</span>
+                  <h3 className="text-sm font-semibold text-foreground">Cette semaine</h3>
+                  <span className="text-xs text-muted-foreground">(actions à fort impact)</span>
+                </div>
+                <div className="space-y-3">
+                  {cetteSmaine.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
+                </div>
+              </div>
+            )}
+
+            {ceMois.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-base">🗓️</span>
+                  <h3 className="text-sm font-semibold text-foreground">Ce mois</h3>
+                  <span className="text-xs text-muted-foreground">(stratégie long terme)</span>
+                </div>
+                <div className="space-y-3">
+                  {ceMois.map((rec, i) => <RecCard key={i} rec={rec} i={i} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Prochaines étapes */}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+              <div className="flex items-start gap-3">
+                <span className="text-xl shrink-0">📊</span>
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Prochaines étapes</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Commencez par les Quick Wins cette semaine, puis attaquez les actions &quot;Cette semaine&quot; d&apos;ici vendredi.{' '}
+                    <strong className="text-foreground">Rescannez dans 2 semaines</strong> pour mesurer l&apos;impact de vos actions et ajuster votre plan.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
