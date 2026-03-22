@@ -17,11 +17,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# Fake DB URL for build time (Prisma needs it for code generation, not actual connection)
+ENV DATABASE_URL="postgresql://fake:fake@localhost:5432/fake"
 
 # Generate Prisma client
 RUN pnpm prisma generate
 
-# Build Next.js
+# Build Next.js (skip DB connection during prerendering)
 RUN pnpm build
 
 # Stage 3: Production runner
