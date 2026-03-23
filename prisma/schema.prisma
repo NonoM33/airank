@@ -28,6 +28,7 @@ model User {
   creditUsages         CreditUsage[]
   scheduledScans       ScheduledScan[]
   scoreAlerts          ScoreAlert[]
+  alerts               Alert[]
   referralsSent        Referral[]       @relation("ReferralsSent")
   referralReceived     Referral?        @relation("ReferralReceived")
   scoreObjectives      ScoreObjective[]
@@ -70,21 +71,23 @@ model VerificationToken {
 }
 
 model Brand {
-  id              String           @id @default(cuid())
+  id              String            @id @default(cuid())
   name            String
   domain          String?
-  keywords        String           @default("[]") // JSON array of strings
+  keywords        String            @default("[]") // JSON array of strings
   sector          String?
-  isCompetitor    Boolean          @default(false)
-  parentBrandId   String?          // For tracked competitors: which brand detected them
+  isCompetitor    Boolean           @default(false)
+  parentBrandId   String?           // For tracked competitors: which brand detected them
   userId          String
-  user            User             @relation(fields: [userId], references: [id])
+  user            User              @relation(fields: [userId], references: [id])
   scans           Scan[]
   competitors     Competitor[]
   scheduledScans  ScheduledScan[]
   scoreAlerts     ScoreAlert[]
+  alerts          Alert[]
+  positionHistory PositionHistory[]
   scoreObjectives ScoreObjective[]
-  createdAt       DateTime         @default(now())
+  createdAt       DateTime          @default(now())
 }
 
 model Competitor {
@@ -165,6 +168,30 @@ model ScoreAlert {
   data      String   @default("{}") // JSON with extra context
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+// User-defined veille alerts (threshold-based)
+model Alert {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // 'score_below' | 'score_above' | 'no_mention' | 'competitor_spike'
+  brandId   String?
+  brand     Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  threshold Float?
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Score history per LLM for trend charts
+model PositionHistory {
+  id      String   @id @default(cuid())
+  brandId String
+  brand   Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  score   Int
+  llm     String   // 'CHATGPT' | 'CLAUDE' | 'PERPLEXITY' | 'GEMINI' | 'global'
+  date    DateTime @default(now())
 }
 
 // Referral program
