@@ -1,14 +1,15 @@
-export const dynamic = "force-dynamic"
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, Lock, Sparkles } from 'lucide-react'
 import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
 import { CompetitorRow } from '@/components/dashboard/CompetitorRow'
 import { generateRecommendations } from '@/lib/recommendations'
-import { getPlanLimits } from '@/lib/plan-limits'
+import { getPlanLimits } from '@/lib/plan-data'
 import { ScheduledScanSection } from '@/components/dashboard/ScheduledScanSection'
 
 // ─── Score helpers ─────────────────────────────────────────────────────────────
@@ -105,16 +106,86 @@ function ScoreGauge({ score, size = 'md' }: { score: number; size?: 'md' | 'lg' 
   )
 }
 
+interface ScanResult {
+  id: string
+  llm: string
+  mentioned: boolean
+  position: number | null
+  sentiment: string | null
+  score: number | null
+  competitors: string
+}
+
+interface Scan {
+  id: string
+  query: string
+  globalScore: number
+  createdAt: string
+  results: ScanResult[]
+}
+
+interface Brand {
+  id: string
+  name: string
+  domain: string | null
+  keywords: string
+  sector: string | null
+}
+
+interface TrackedCompetitor {
+  id: string
+  name: string
+  domain: string | null
+  scans: { globalScore: number; createdAt: string; results: { llm: string; mentioned: boolean; score: number | null }[] }[]
+}
+
+interface BrandDetailData {
+  brand: Brand
+  allScans: Scan[]
+  allScanResults: { competitors: string; llm: string; scanId: string }[]
+  scheduledScan: { id: string; frequency: string; nextRunAt: string; lastRunAt: string | null; enabled: boolean } | null
+  trackedCompetitors: TrackedCompetitor[]
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function BrandDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const session = await auth()
-  const userId = session!.user.id
-  const plan = (session!.user as { plan?: string }).plan ?? 'FREE'
+export default function BrandDetailPage() {
+  const params = useParams()
+  const id = params.id as string
+  const { data: session } = useSession()
+  const [data, setData] = useState<BrandDetailData | null | undefined>(undefined)
 
-  const brand = await prisma.brand.findFirst({ where: { id, userId } })
-  if (!brand) notFound()
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/brands/${id}`)
+      .then((r) => {
+        if (r.status === 404) { setData(null); return null }
+        return r.json()
+      })
+      .then((d) => { if (d) setData(d) })
+      .catch(() => setData(null))
+  }, [id])
+
+  const plan = (session?.user as { plan?: string })?.plan ?? 'FREE'
+
+  if (data === undefined) {
+    return (
+      <div className="p-4 lg:p-6">
+        <p className="text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (data === null) {
+    return (
+      <div className="p-4 lg:p-6">
+        <p className="text-muted-foreground">Marque introuvable.</p>
+        <Link href="/dashboard" className="text-primary hover:underline text-sm mt-2 inline-block">← Dashboard</Link>
+      </div>
+    )
+  }
+
+  const { brand, allScans, allScanResults, scheduledScan, trackedCompetitors } = data
 
   const limits = getPlanLimits(plan)
   const canAnalyzeCompetitors = limits.competitors > 0
@@ -122,32 +193,6 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
   const keywords: string[] = (() => {
     try { return JSON.parse(brand.keywords) as string[] } catch { return [] }
   })()
-
-  const [allScans, allScanResults, scheduledScan, trackedCompetitors] = await Promise.all([
-    prisma.scan.findMany({
-      where: { brandId: brand.id },
-      orderBy: { createdAt: 'desc' },
-      include: { results: true },
-    }),
-    prisma.scanResult.findMany({
-      where: { scan: { brandId: brand.id } },
-      select: { competitors: true, llm: true, scanId: true },
-    }),
-    prisma.scheduledScan.findFirst({
-      where: { brandId: brand.id, userId },
-    }),
-    prisma.brand.findMany({
-      where: { userId, isCompetitor: true, parentBrandId: brand.id },
-      include: {
-        scans: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { globalScore: true, createdAt: true, results: { select: { llm: true, mentioned: true, score: true } } },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ])
 
   const latestScan = allScans[0] ?? null
   const prevScan = allScans[1] ?? null
@@ -351,7 +396,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
 
-          {/* Action Plan — compact cards */}
+          {/* Action Plan */}
           <div className="space-y-3">
             <h2 className="text-base font-bold">Plan d&apos;action recommandé</h2>
             {recommendations.length > 0 ? (
@@ -403,9 +448,9 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {trackedCompetitors.map((comp) => {
-              const latestScan = comp.scans[0]
-              const score = latestScan?.globalScore ?? null
-              const mentionedCount = latestScan?.results.filter((r) => r.mentioned).length ?? 0
+              const latestCompScan = comp.scans[0]
+              const score = latestCompScan?.globalScore ?? null
+              const compMentionedCount = latestCompScan?.results.filter((r) => r.mentioned).length ?? 0
               return (
                 <Link key={comp.id} href={`/brands/${comp.id}`} className="group">
                   <div className="card-glow rounded-xl border border-border bg-card p-4 hover:border-primary/40 transition-colors">
@@ -421,16 +466,15 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{mentionedCount}/4 LLMs</span>
+                      <span>{compMentionedCount}/4 LLMs</span>
                       {score !== null && (
                         <>
                           <span>·</span>
                           <span className={getScoreColor(score)}>{getScoreLabel(score)}</span>
                         </>
                       )}
-                      {!latestScan && <span className="text-amber-400">Aucun scan</span>}
+                      {!latestCompScan && <span className="text-amber-400">Aucun scan</span>}
                     </div>
-                    {/* Score bar */}
                     {score !== null && (
                       <div className="mt-3 h-1 rounded-full bg-border overflow-hidden">
                         <div
@@ -479,12 +523,12 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
                         <td className="px-5 py-3">
                           <p className="text-sm font-medium max-w-xs truncate">{scan.query}</p>
                           <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
-                            {scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                            {new Date(scan.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                           </p>
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell">
                           <p className="text-sm text-muted-foreground whitespace-nowrap">
-                            {scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                            {new Date(scan.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                           </p>
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell">
@@ -526,8 +570,8 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
         initial={scheduledScan ? {
           id: scheduledScan.id,
           frequency: scheduledScan.frequency,
-          nextRunAt: scheduledScan.nextRunAt.toISOString(),
-          lastRunAt: scheduledScan.lastRunAt?.toISOString() ?? null,
+          nextRunAt: scheduledScan.nextRunAt,
+          lastRunAt: scheduledScan.lastRunAt,
           enabled: scheduledScan.enabled,
         } : null}
       />

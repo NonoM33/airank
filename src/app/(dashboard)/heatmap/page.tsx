@@ -31,7 +31,7 @@ export default function HeatmapPage() {
                 results: s.results.map((r) => ({
                   llm: r.llm,
                   mentioned: r.mentioned,
-                  score: r.score,
+                  score: r.score ?? 0,
                 })),
               })))
             })

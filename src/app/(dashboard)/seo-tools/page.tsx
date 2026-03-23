@@ -18,6 +18,10 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
+  Gauge,
+  Smartphone,
+  Monitor,
+  Zap,
 } from 'lucide-react'
 
 // ── SEO Audit ────────────────────────────────────────────────────────────────

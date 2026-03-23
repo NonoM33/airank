@@ -46,9 +46,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       await prisma.creditUsage.create({
         data: {
           userId,
-          credits: -credits, // negative = credits added
+          amount: -credits, // negative = credits added
           action: 'recharge',
-          detail: `Recharge ${session.metadata.pack}: +${credits} crédits`,
+          details: `Recharge ${session.metadata.pack}: +${credits} crédits`,
         },
       })
     }

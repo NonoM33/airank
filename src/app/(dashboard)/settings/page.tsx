@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BrandManager } from '@/components/dashboard/BrandManager'
-import { getPlanLimits } from '@/lib/plan-limits'
+import { getPlanLimits } from '@/lib/plan-data'
 import { useSession } from 'next-auth/react'
 
 interface Brand {

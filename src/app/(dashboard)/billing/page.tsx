@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BillingClient } from '@/components/dashboard/BillingClient'
-import { getPlanLimits } from '@/lib/plan-limits'
+import { getPlanLimits } from '@/lib/plan-data'
 
 interface BillingData {
   user: { stripeId: string | null; plan: string; credits: number } | null

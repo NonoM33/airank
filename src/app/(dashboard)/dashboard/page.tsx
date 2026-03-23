@@ -1,6 +1,7 @@
-export const dynamic = "force-dynamic"
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
 import { DashboardOnboarding } from '@/components/dashboard/DashboardOnboarding'
@@ -53,11 +54,11 @@ const LLM_SHORT: Record<string, string> = {
 }
 
 function computeChartData(
-  scans: { createdAt: Date; globalScore: number }[]
+  scans: { createdAt: string; globalScore: number }[]
 ): { date: string; score: number }[] {
   const byDate = new Map<string, number[]>()
   for (const scan of scans) {
-    const key = scan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+    const key = new Date(scan.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
     const arr = byDate.get(key) ?? []
     arr.push(scan.globalScore)
     byDate.set(key, arr)
@@ -68,21 +69,81 @@ function computeChartData(
   }))
 }
 
-export default async function DashboardPage() {
-  const session = await auth()
-  const userId = session!.user.id
+interface Brand {
+  id: string
+  name: string
+  domain: string | null
+  keywords: string
+}
 
-  const [allBrands, dbUser] = await Promise.all([
-    prisma.brand.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { onboardingCompleted: true, plan: true },
-    }),
-  ])
+interface ScanResult {
+  id: string
+  llm: string
+  mentioned: boolean
+  position: number | null
+  sentiment: string | null
+}
 
+interface Scan {
+  id: string
+  query: string
+  globalScore: number
+  createdAt: string
+  results: ScanResult[]
+}
+
+interface DashboardData {
+  allBrands: Brand[]
+  dbUser: { onboardingCompleted: boolean; plan: string } | null
+  // Single brand
+  brand?: Brand
+  latestScan?: (Scan & { results: ScanResult[] }) | null
+  prevScan?: { globalScore: number } | null
+  chartScans?: { createdAt: string; globalScore: number }[]
+  recentScans?: (Scan & { results: { llm: string; mentioned: boolean }[] })[]
+  allResults?: { competitors: string }[]
+  scoreObjective?: { targetScore: number; targetDate: string; achieved: boolean } | null
+  // Multi brand
+  brandsWithData?: {
+    brand: Brand
+    latestScan: (Scan & { results: { llm: string; mentioned: boolean }[] }) | null
+    topCompetitors: string[]
+    keywords: string[]
+  }[]
+}
+
+export default function DashboardPage() {
+  const { data: session } = useSession()
+  const [data, setData] = useState<DashboardData | null>(null)
+
+  useEffect(() => {
+    fetch('/api/dashboard/full')
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => {})
+  }, [])
+
+  const plan = (session?.user as { plan?: string })?.plan ?? 'FREE'
+
+  if (!data) {
+    return (
+      <div className="p-4 lg:p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Chargement…</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const { allBrands, dbUser, brandsWithData } = data
   const showOnboarding = !dbUser?.onboardingCompleted
 
   // ── 0 brands: onboarding ───────────────────────────────────────────────────
@@ -96,7 +157,6 @@ export default async function DashboardPage() {
           <p className="text-muted-foreground">Bienvenue sur AIRank</p>
         </div>
 
-        {/* Ghost score cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="col-span-2 lg:col-span-1 card-glow rounded-xl bg-card border border-border p-6 flex flex-col items-center justify-center text-center opacity-25">
             <p className="text-5xl font-bold font-mono text-muted-foreground">—</p>
@@ -132,41 +192,7 @@ export default async function DashboardPage() {
 
   // ── 2+ brands: multi-brand grid ────────────────────────────────────────────
 
-  if (allBrands.length > 1) {
-    const brandsWithData = await Promise.all(
-      allBrands.map(async (brand) => {
-        const keywords: string[] = (() => {
-          try { return JSON.parse(brand.keywords) as string[] } catch { return [] }
-        })()
-        const [latestScan, competitorRows] = await Promise.all([
-          prisma.scan.findFirst({
-            where: { brandId: brand.id },
-            orderBy: { createdAt: 'desc' },
-            include: { results: { select: { llm: true, mentioned: true } } },
-          }),
-          prisma.scanResult.findMany({
-            where: { scan: { brandId: brand.id } },
-            select: { competitors: true },
-            orderBy: { id: 'desc' },
-            take: 30,
-          }),
-        ])
-        const competitorMap = new Map<string, number>()
-        for (const row of competitorRows) {
-          try {
-            for (const c of JSON.parse(row.competitors) as string[]) {
-              if (c.trim()) competitorMap.set(c, (competitorMap.get(c) ?? 0) + 1)
-            }
-          } catch { /* skip */ }
-        }
-        const topCompetitors = Array.from(competitorMap.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([name]) => name)
-        return { brand, latestScan, topCompetitors, keywords }
-      })
-    )
-
+  if (allBrands.length > 1 && brandsWithData) {
     return (
       <div className="p-4 lg:p-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
@@ -200,7 +226,6 @@ export default async function DashboardPage() {
 
             return (
               <div key={brand.id} className="card-glow rounded-xl bg-card border border-border p-5 flex flex-col gap-4 hover:border-primary/30 transition-colors">
-                {/* Brand header */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-bold truncate">{brand.name}</p>
@@ -213,7 +238,6 @@ export default async function DashboardPage() {
                   )}
                 </div>
 
-                {/* Score + LLM dots */}
                 <div className="flex items-center gap-4">
                   <div className="shrink-0 text-center">
                     <p className={`text-5xl font-bold font-mono leading-none ${score !== null ? getScoreColor(score) : 'text-muted-foreground'}`}>
@@ -236,7 +260,7 @@ export default async function DashboardPage() {
                     </div>
                     {latestScan ? (
                       <p className="text-xs text-muted-foreground">
-                        {mentionedCount}/4 LLMs · {latestScan.createdAt.toLocaleDateString('fr-FR', {
+                        {mentionedCount}/4 LLMs · {new Date(latestScan.createdAt).toLocaleDateString('fr-FR', {
                           day: '2-digit', month: '2-digit', year: '2-digit',
                         })}
                       </p>
@@ -283,7 +307,7 @@ export default async function DashboardPage() {
 
   // ── 1 brand: single detailed view ─────────────────────────────────────────
 
-  const brand = allBrands[0]
+  const brand = data.brand ?? allBrands[0]
   const brandsForForm = allBrands.map((b) => ({
     id: b.id,
     name: b.name,
@@ -291,40 +315,12 @@ export default async function DashboardPage() {
     keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
   }))
 
-  const [latestScan, prevScan, chartScans, recentScans, allResults, scoreObjective] = await Promise.all([
-    prisma.scan.findFirst({
-      where: { brandId: brand.id },
-      orderBy: { createdAt: 'desc' },
-      include: { results: true },
-    }),
-    prisma.scan.findFirst({
-      where: { brandId: brand.id },
-      orderBy: { createdAt: 'desc' },
-      skip: 1,
-      select: { globalScore: true },
-    }),
-    prisma.scan.findMany({
-      where: {
-        brandId: brand.id,
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: { createdAt: true, globalScore: true },
-    }),
-    prisma.scan.findMany({
-      where: { brandId: brand.id },
-      orderBy: { createdAt: 'desc' },
-      take: 8,
-      include: { results: { select: { llm: true, mentioned: true } } },
-    }),
-    prisma.scanResult.findMany({
-      where: { scan: { brandId: brand.id } },
-      select: { competitors: true },
-    }),
-    prisma.scoreObjective.findUnique({
-      where: { userId_brandId: { userId, brandId: brand.id } },
-    }),
-  ])
+  const latestScan = data.latestScan ?? null
+  const prevScan = data.prevScan ?? null
+  const chartScans = data.chartScans ?? []
+  const recentScans = data.recentScans ?? []
+  const allResults = data.allResults ?? []
+  const scoreObjective = data.scoreObjective ?? null
 
   const globalScore = latestScan?.globalScore ?? 0
   const trend = latestScan && prevScan ? latestScan.globalScore - prevScan.globalScore : 0
@@ -399,7 +395,7 @@ export default async function DashboardPage() {
           <p className="text-xs text-muted-foreground mt-1">/ 100 · Score global</p>
           {latestScan && (
             <p className="text-[10px] text-muted-foreground mt-3 pt-3 border-t border-border">
-              {latestScan.createdAt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+              {new Date(latestScan.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
             </p>
           )}
         </div>
@@ -432,11 +428,11 @@ export default async function DashboardPage() {
       <NextBestAction
         scans={recentScans.map((s) => ({
           globalScore: s.globalScore,
-          createdAt: s.createdAt.toISOString(),
+          createdAt: s.createdAt,
           results: s.results.map((r) => ({ llm: r.llm, mentioned: r.mentioned })),
         }))}
         brandName={brand.name}
-        plan={dbUser?.plan ?? 'FREE'}
+        plan={plan}
       />
 
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
@@ -469,7 +465,7 @@ export default async function DashboardPage() {
               currentScore={globalScore}
               objective={scoreObjective ? {
                 targetScore: scoreObjective.targetScore,
-                targetDate: scoreObjective.targetDate.toISOString(),
+                targetDate: scoreObjective.targetDate,
                 achieved: scoreObjective.achieved,
               } : null}
             />
@@ -511,7 +507,7 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{scan.query}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {scan.createdAt.toLocaleDateString('fr-FR', {
+                        {new Date(scan.createdAt).toLocaleDateString('fr-FR', {
                           day: '2-digit', month: '2-digit', year: '2-digit',
                         })}
                       </p>

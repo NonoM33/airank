@@ -92,10 +92,59 @@ const ACTION_LABELS: Record<string, string> = {
   auto_scan: 'Scan automatique',
 }
 
+function RechargeGrid() {
+  const [recharging, setRecharging] = useState(false)
+  const [rechargeError, setRechargeError] = useState('')
+  const packs = [
+    { pack: 'PACK_50', credits: 50, price: 9, perCredit: '0.18' },
+    { pack: 'PACK_200', credits: 200, price: 29, perCredit: '0.15', popular: true },
+    { pack: 'PACK_500', credits: 500, price: 59, perCredit: '0.12', best: true },
+  ] as const
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {packs.map(p => (
+          <button
+            key={p.pack}
+            onClick={async () => {
+              setRecharging(true); setRechargeError('')
+              try {
+                const res = await fetch('/api/stripe/recharge', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ pack: p.pack }),
+                })
+                const data = await res.json()
+                if (data.url) window.location.href = data.url
+                else setRechargeError(data.error || 'Erreur')
+              } catch { setRechargeError('Erreur réseau') }
+              finally { setRecharging(false) }
+            }}
+            disabled={recharging}
+            className={`relative rounded-xl border p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/5 ${
+              'popular' in p && p.popular ? 'border-primary bg-primary/5' : 'border-border'
+            }`}
+          >
+            {'popular' in p && p.popular && <Badge className="absolute -top-2 right-3 text-[10px]">Populaire</Badge>}
+            {'best' in p && p.best && <Badge variant="secondary" className="absolute -top-2 right-3 text-[10px]">Meilleur prix</Badge>}
+            <div className="text-2xl font-bold">{p.credits}</div>
+            <div className="text-xs text-muted-foreground">crédits</div>
+            <div className="mt-2 text-lg font-semibold">{p.price}€</div>
+            <div className="text-[10px] text-muted-foreground">{p.perCredit}€/crédit</div>
+          </button>
+        ))}
+      </div>
+      {rechargeError && <p className="text-xs text-red-400 mt-2">{rechargeError}</p>}
+    </>
+  )
+}
+
 export function BillingClient({ currentPlan, stripeId, limits, usage, plans, creditUsage }: Props) {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [activePlan, setActivePlan] = useState(currentPlan)
   const searchParams = useSearchParams()
 
@@ -229,42 +278,7 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans, cre
       <div className="rounded-xl border border-border bg-card p-6">
         <h3 className="font-semibold mb-1 flex items-center gap-2"><Coins className="h-4 w-4 text-primary" /> Recharger des crédits</h3>
         <p className="text-xs text-muted-foreground mb-4">Achat unique, crédits ajoutés instantanément à votre compte</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {([
-            { pack: 'PACK_50', credits: 50, price: 9, perCredit: '0.18' },
-            { pack: 'PACK_200', credits: 200, price: 29, perCredit: '0.15', popular: true },
-            { pack: 'PACK_500', credits: 500, price: 59, perCredit: '0.12', best: true },
-          ] as const).map(p => (
-            <button
-              key={p.pack}
-              onClick={async () => {
-                setLoading(true)
-                try {
-                  const res = await fetch('/api/stripe/recharge', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pack: p.pack }),
-                  })
-                  const data = await res.json()
-                  if (data.url) window.location.href = data.url
-                  else setError(data.error || 'Erreur')
-                } catch { setError('Erreur réseau') }
-                finally { setLoading(false) }
-              }}
-              disabled={loading}
-              className={`relative rounded-xl border p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/5 ${
-                p.popular ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
-            >
-              {p.popular && <Badge className="absolute -top-2 right-3 text-[10px]">Populaire</Badge>}
-              {p.best && <Badge variant="secondary" className="absolute -top-2 right-3 text-[10px]">Meilleur prix</Badge>}
-              <div className="text-2xl font-bold">{p.credits}</div>
-              <div className="text-xs text-muted-foreground">crédits</div>
-              <div className="mt-2 text-lg font-semibold">{p.price}€</div>
-              <div className="text-[10px] text-muted-foreground">{p.perCredit}€/crédit</div>
-            </button>
-          ))}
-        </div>
+        <RechargeGrid />
       </div>
 
       {/* ── Row 2: All plan cards ───────────────────────────────────────────── */}
