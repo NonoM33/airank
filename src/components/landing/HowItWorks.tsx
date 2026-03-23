@@ -68,7 +68,7 @@ export function HowItWorks() {
         <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6">
           {/* Connector line on desktop */}
           <div
-            className="hidden md:block absolute top-14 left-[calc(33%+2rem)] right-[calc(33%+2rem)] h-px"
+            className="hidden md:block absolute top-[5.5rem] left-[calc(33%+2rem)] right-[calc(33%+2rem)] h-px"
             style={{
               background:
                 'linear-gradient(to right, rgba(99,102,241,0.4), rgba(139,92,246,0.6), rgba(16,163,127,0.4))',
