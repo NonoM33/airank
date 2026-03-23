@@ -17,12 +17,21 @@
 6. **Multi-brand**: Test with 0, 1, and 3+ brands
 7. **Credits**: Test with 0 credits (should show CTA, not red text)
 
+### Results Persistence (CRITICAL — NO DATA LOSS)
+- **EVERY analysis/tool result MUST be saved to DB** — users pay credits for results, they must be able to re-consult them anytime
+- Use the `AnalysisResult` model to store results (type, userId, brandId, input, result JSON, createdAt)
+- Before running an analysis, check if a recent cached result exists (< 24h) — if so, return it for free
+- Show analysis history: users can browse all their past results
+- **NEVER make users pay twice to see the same result**
+
 ### Common Pitfalls (DON'T repeat these):
 - ❌ `z.string().url()` rejects URLs without protocol → always auto-prefix `https://`
 - ❌ Server imports (prisma, db) in 'use client' components → use fetch() instead
 - ❌ `loading` state not defined in scope → use local component state
 - ❌ `--accept-data-loss` in prisma → use `migrate deploy`
 - ❌ Hardcoded `brands[0]` → always add brand selector
+- ❌ Analysis results not saved → ALWAYS persist to AnalysisResult table
+- ❌ Credits charged on re-view → cache results, return cached for free
 
 ## UX Principles (MANDATORY)
 1. **Apple-level polish** — Every screen must be beautiful, clear, and intuitive. No confusion ever.
