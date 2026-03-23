@@ -606,9 +606,9 @@ export default function SeoToolsPage() {
       </div>
 
       <Tabs defaultValue="seo-audit">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-secondary p-1">
+        <TabsList className="flex flex-wrap h-auto gap-2 bg-transparent p-0">
           {TOOLS.map(tool => (
-            <TabsTrigger key={tool.id} value={tool.id} className="text-xs py-2 px-2 data-[state=active]:bg-background">
+            <TabsTrigger key={tool.id} value={tool.id} className="text-xs py-2 px-4 rounded-lg border border-border bg-secondary/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary transition-all">
               <tool.icon className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               {tool.label}
             </TabsTrigger>
