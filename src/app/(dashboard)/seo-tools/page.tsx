@@ -96,7 +96,7 @@ function SeoAuditTool() {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-[1fr,auto,auto]">
         <Input
-          placeholder="https://example.com/votre-page"
+          placeholder="example.com/votre-page"
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && run()}

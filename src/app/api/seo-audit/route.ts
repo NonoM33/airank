@@ -17,6 +17,10 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null)
+  // Auto-add https:// if missing
+  if (body?.url && typeof body.url === 'string' && !body.url.match(/^https?:\/\//)) {
+    body.url = 'https://' + body.url
+  }
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: 'URL invalide' }, { status: 400 })
