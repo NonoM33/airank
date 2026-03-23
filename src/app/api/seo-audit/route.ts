@@ -70,7 +70,19 @@ Effectue une analyse complète et réponds UNIQUEMENT en JSON valide avec cette 
     "schema": { "score": <0-100>, "details": "<string>", "issues": ["<string>"] },
     "llm_readability": { "score": <0-100>, "details": "<string>", "issues": ["<string>"] }
   },
-  "recommendations": ["<string>", "<string>", "<string>"],
+  "recommendations": [
+    {
+      "title": "<titre court de la recommandation>",
+      "priority": "<haute|moyenne|faible>",
+      "difficulty": "<facile|moyen|avancé>",
+      "time": "<temps estimé ex: 5 min, 30 min, 2h>",
+      "impact": "<impact SEO LLM ex: +10 pts LLM, +15 pts Schema>",
+      "steps": [
+        { "text": "<description de l'étape 1>" },
+        { "text": "<description de l'étape 2>", "code": "<snippet de code si applicable>", "language": "<html|json|javascript>" }
+      ]
+    }
+  ],
   "strengths": ["<string>", "<string>"],
   "h1": "<extracted H1 or empty>",
   "h2s": ["<list of H2s found, max 5>"],

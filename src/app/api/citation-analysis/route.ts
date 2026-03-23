@@ -57,7 +57,19 @@ Analyse en détail et réponds UNIQUEMENT en JSON valide:
   "strengths": ["<point fort mentionné>"],
   "weaknesses": ["<point faible ou critique mentionné>"],
   "summary": "<résumé en 2 phrases de comment la marque est perçue>",
-  "recommendations": ["<conseil pour améliorer la citation>"]
+  "recommendations": [
+    {
+      "title": "<titre court du conseil>",
+      "priority": "<haute|moyenne|faible>",
+      "difficulty": "<facile|moyen|avancé>",
+      "time": "<temps estimé ex: 30 min, 2h>",
+      "impact": "<impact ex: +2 citations LLM, meilleur sentiment>",
+      "steps": [
+        { "text": "<description de l'action concrète à faire>" },
+        { "text": "<autre action>", "code": "<exemple de texte ou snippet si applicable>", "language": "<html|json|text>" }
+      ]
+    }
+  ]
 }`
 
   try {

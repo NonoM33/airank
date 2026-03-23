@@ -22,7 +22,9 @@ import {
   Smartphone,
   Monitor,
   Zap,
+  Info,
 } from 'lucide-react'
+import { ActionableRecommendation } from '@/components/ui/actionable-recommendation'
 
 // ── SEO Audit ────────────────────────────────────────────────────────────────
 
@@ -182,13 +184,11 @@ function SeoAuditTool() {
               {result.recommendations?.length > 0 && (
                 <Card className="p-4 space-y-2">
                   <h3 className="text-sm font-semibold">Recommandations</h3>
-                  <ul className="space-y-1">
-                    {result.recommendations.map((r: string, i: number) => (
-                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-1.5">
-                        <span className="text-primary font-bold shrink-0">{i + 1}.</span> {r}
-                      </li>
+                  <div className="space-y-2">
+                    {result.recommendations.map((r: any, i: number) => (
+                      <ActionableRecommendation key={i} recommendation={r} index={i} />
                     ))}
-                  </ul>
+                  </div>
                 </Card>
               )}
             </div>
@@ -309,6 +309,16 @@ function ContentOptimizerTool() {
               </div>
             </div>
           )}
+          {result.tips?.length > 0 && (
+            <Card className="p-4 space-y-2">
+              <h3 className="text-sm font-semibold">Conseils pour aller plus loin</h3>
+              <div className="space-y-2">
+                {result.tips.map((t: any, i: number) => (
+                  <ActionableRecommendation key={i} recommendation={t} index={i} />
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </div>
@@ -426,9 +436,24 @@ function FaqGeneratorTool() {
           )}
 
           {activeView === 'jsonld' && (
-            <Card className="p-4">
-              <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{result.jsonLd}</pre>
-            </Card>
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">Où coller ce JSON-LD ?</p>
+                  <ol className="space-y-0.5 list-none">
+                    <li>1. Copiez le code ci-dessous</li>
+                    <li>2. Collez-le dans le <code className="bg-secondary px-1 rounded text-[11px]">&lt;head&gt;</code> de votre page HTML (avant <code className="bg-secondary px-1 rounded text-[11px]">&lt;/head&gt;</code>)</li>
+                    <li>3. Sur WordPress : utilisez <strong>Yoast SEO</strong> → Schema ou le plugin <strong>Insert Headers and Footers</strong></li>
+                    <li>4. Sur Shopify / Webflow : ajoutez-le dans le custom code de la page</li>
+                    <li>5. Validez sur <strong>schema.org/SchemaValidator</strong></li>
+                  </ol>
+                </div>
+              </div>
+              <Card className="p-4">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{result.jsonLd}</pre>
+              </Card>
+            </div>
           )}
         </div>
       )}
@@ -558,13 +583,11 @@ function CitationAnalysisTool() {
           {result.recommendations?.length > 0 && (
             <Card className="p-4 space-y-2">
               <h3 className="text-sm font-semibold">Recommandations</h3>
-              <ul className="space-y-1">
-                {result.recommendations.map((r: string, i: number) => (
-                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-1.5">
-                    <span className="text-primary font-bold shrink-0">{i + 1}.</span> {r}
-                  </li>
+              <div className="space-y-2">
+                {result.recommendations.map((r: any, i: number) => (
+                  <ActionableRecommendation key={i} recommendation={r} index={i} />
                 ))}
-              </ul>
+              </div>
             </Card>
           )}
         </div>

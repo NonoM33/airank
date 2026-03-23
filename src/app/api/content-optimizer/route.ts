@@ -52,7 +52,19 @@ Réponds UNIQUEMENT en JSON valide:
   "changes": ["<modification 1>", "<modification 2>", "<modification 3>"],
   "scoreEstimate": { "before": <0-100>, "after": <0-100> },
   "keyPhrases": ["<phrase clé 1>", "<phrase clé 2>", "<phrase clé 3>"],
-  "tips": ["<conseil 1>", "<conseil 2>"]
+  "tips": [
+    {
+      "title": "<titre court du conseil>",
+      "priority": "<haute|moyenne|faible>",
+      "difficulty": "<facile|moyen|avancé>",
+      "time": "<temps estimé ex: 10 min, 1h>",
+      "impact": "<impact ex: +20% citations LLM>",
+      "steps": [
+        { "text": "<action concrète à effectuer>" },
+        { "text": "<autre action>", "code": "<exemple de phrase ou snippet si applicable>", "language": "<text|html|json>" }
+      ]
+    }
+  ]
 }`
 
   try {
