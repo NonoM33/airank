@@ -20,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
   }
 
-  const [allScans, allScanResults, scheduledScan, trackedCompetitors] = await Promise.all([
+  const [allScans, allScanResults, scheduledScan, trackedCompetitors, userBrandNames] = await Promise.all([
     prisma.scan.findMany({
       where: { brandId: brand.id },
       orderBy: { createdAt: 'desc' },
@@ -44,9 +44,13 @@ export async function GET(
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.brand.findMany({
+      where: { userId: session.user.id, isCompetitor: false },
+      select: { name: true },
+    }),
   ])
 
-  return NextResponse.json({ brand, allScans, allScanResults, scheduledScan, trackedCompetitors })
+  return NextResponse.json({ brand, allScans, allScanResults, scheduledScan, trackedCompetitors, userBrandNames: userBrandNames.map(b => b.name) })
 }
 
 const updateSchema = z.object({

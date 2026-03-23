@@ -146,6 +146,7 @@ interface BrandDetailData {
   allScanResults: { competitors: string; llm: string; scanId: string }[]
   scheduledScan: { id: string; frequency: string; nextRunAt: string; lastRunAt: string | null; enabled: boolean } | null
   trackedCompetitors: TrackedCompetitor[]
+  userBrandNames?: string[]
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -189,7 +190,7 @@ export default function BrandDetailPage() {
     )
   }
 
-  const { brand, allScans, allScanResults, scheduledScan, trackedCompetitors } = data
+  const { brand, allScans, allScanResults, scheduledScan, trackedCompetitors, userBrandNames = [] } = data
 
   const limits = getPlanLimits(plan)
   const canAnalyzeCompetitors = limits.competitors > 0
@@ -223,7 +224,10 @@ export default function BrandDetailPage() {
     }
   }
 
-  const trackedNames = new Set(trackedCompetitors.map((c) => c.name.toLowerCase()))
+  const trackedNames = new Set([
+    ...trackedCompetitors.map((c) => c.name.toLowerCase()),
+    ...userBrandNames.map((n: string) => n.toLowerCase()),
+  ])
 
   const sortedCompetitors = Array.from(competitorStats.entries())
     .sort((a, b) => b[1].llms.size - a[1].llms.size || b[1].totalMentions - a[1].totalMentions)

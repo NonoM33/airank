@@ -35,13 +35,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Marque parente introuvable' }, { status: 404 })
   }
 
-  // Check if already tracked
+  // Check if already tracked as competitor OR already exists as a user brand
   const existing = await prisma.brand.findFirst({
     where: {
       userId: session.user.id,
-      name,
-      isCompetitor: true,
-      parentBrandId,
+      name: { equals: name, mode: 'insensitive' },
     },
   })
   if (existing) {
