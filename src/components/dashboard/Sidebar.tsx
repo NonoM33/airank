@@ -30,6 +30,7 @@ const navItems = [
   { href: '/seo-tools', label: 'Outils SEO', icon: Wrench, proOnly: false },
   { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
   { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
+  { href: '/analytics', label: 'Analytics', icon: Activity, proOnly: false },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
   { href: '/veille', label: 'Veille', icon: Activity, proOnly: false },
   { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
