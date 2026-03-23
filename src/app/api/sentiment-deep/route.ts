@@ -95,7 +95,7 @@ ${contexts}
 Réponds UNIQUEMENT en JSON array (un objet par extrait dans l'ordre): [{"llm":"CHATGPT","label":"Recommandation"}]
 Labels valides: Recommandation, Enthousiaste, Neutre, Mise en garde`
 
-    const aiText = await queryOpenRouter('google/gemini-flash-1.5', prompt)
+    const aiText = await queryOpenRouter('google/gemini-flash-1.5', prompt, { maxTokens: 3000 })
     const match = aiText.match(/\[[\s\S]*\]/)
     if (match) {
       const items = JSON.parse(match[0]) as Array<{ llm: string; label: string }>

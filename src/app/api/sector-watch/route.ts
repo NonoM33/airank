@@ -75,7 +75,7 @@ export async function POST(req: Request) {
 
   try {
     const prompt = buildSectorPrompt(sector, brandName, competitors)
-    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt)
+    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt, { maxTokens: 3000 })
 
     let analysis: Record<string, unknown>
     try {

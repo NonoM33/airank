@@ -1,7 +1,8 @@
 // Shared OpenRouter API client for all LLM scanners
 export async function queryOpenRouter(
   model: string,
-  prompt: string
+  prompt: string,
+  options?: { maxTokens?: number; temperature?: number }
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured')
@@ -17,8 +18,8 @@ export async function queryOpenRouter(
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1024,
-      temperature: 0.7,
+      max_tokens: options?.maxTokens ?? 1024,
+      temperature: options?.temperature ?? 0.7,
     }),
   })
 

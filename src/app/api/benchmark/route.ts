@@ -100,7 +100,7 @@ Donne les scores moyens typiques pour une entreprise du secteur "${sector}" sur 
 
 Réponds UNIQUEMENT avec ce JSON sans markdown: {"frequency":XX,"position":XX,"sentiment":XX,"coverage":XX,"constance":XX,"authority":XX}`
 
-    const aiText = await queryOpenRouter('google/gemini-flash-1.5', prompt)
+    const aiText = await queryOpenRouter('google/gemini-flash-1.5', prompt, { maxTokens: 3000 })
     const match = aiText.match(/\{[^}]+\}/)
     if (match) {
       const ai = JSON.parse(match[0])

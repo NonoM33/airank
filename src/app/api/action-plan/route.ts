@@ -82,9 +82,9 @@ Réponds UNIQUEMENT avec un tableau JSON valide (sans markdown, sans commentaire
 Les dayOffset doivent être répartis sur 30 jours. L'actionType doit correspondre au type de vérification automatique possible sur le site web.`
 
   try {
-    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt)
+    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt, { maxTokens: 4096 })
     const jsonMatch = raw.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) throw new Error('No JSON array in response')
+    if (!jsonMatch) throw new Error('No JSON array in response: ' + raw.slice(0, 200))
     const items: Array<{
       title: string
       description: string
@@ -119,8 +119,12 @@ Les dayOffset doivent être répartis sur 30 jours. L'actionType doit correspond
       include: { items: true },
     })
 
+    // Debit credits only after successful generation
+    await useCredits(session.user.id, ACTION_PLAN_COST, 'action_plan', `Plan for ${brand.name}`)
+
     return NextResponse.json(plan)
-  } catch {
+  } catch (err) {
+    console.error('[action-plan] Generation error:', err)
     return NextResponse.json({ error: 'Génération impossible. Réessayez.' }, { status: 500 })
   }
 }

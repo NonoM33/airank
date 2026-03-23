@@ -72,7 +72,7 @@ Réponds UNIQUEMENT en JSON valide:
 }`
 
   try {
-    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt)
+    const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt, { maxTokens: 3000 })
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
