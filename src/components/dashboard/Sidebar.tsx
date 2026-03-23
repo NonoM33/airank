@@ -13,16 +13,25 @@ import {
   X,
   LogOut,
   Sparkles,
+  Bell,
+  BarChart2,
+  Columns,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { AlertsBadge } from '@/components/dashboard/AlertsPanel'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/settings', label: 'Mes Marques', icon: Building2 },
-  { href: '/scans', label: 'Scans', icon: Search },
-  { href: '/billing', label: 'Abonnement', icon: CreditCard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, proOnly: false },
+  { href: '/settings', label: 'Mes Marques', icon: Building2, proOnly: false },
+  { href: '/scans', label: 'Scans', icon: Search, proOnly: false },
+  { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
+  { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
+  { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
+  { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
 ]
+
+const PRO_PLANS = ['PRO', 'AGENCY']
 
 const PLAN_BADGE: Record<string, string> = {
   FREE: 'bg-zinc-800 text-zinc-400',
@@ -67,8 +76,10 @@ function SidebarInner({
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon, proOnly }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          const isAlerts = href === '/alerts'
+          const showProBadge = proOnly && !PRO_PLANS.includes(userPlan)
           return (
             <Link
               key={href}
@@ -81,7 +92,13 @@ function SidebarInner({
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {isAlerts && <AlertsBadge />}
+              {showProBadge && (
+                <Badge className="text-[10px] px-1.5 py-0 bg-indigo-500/20 text-indigo-400 border-indigo-500/30">
+                  PRO
+                </Badge>
+              )}
             </Link>
           )
         })}

@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const brands = await prisma.brand.findMany({
-    where: { userId: session.user.id },
+    where: { userId: session.user.id, isCompetitor: false },
     include: {
       competitors: true,
       scans: {

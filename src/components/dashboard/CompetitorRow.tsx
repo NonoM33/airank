@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Loader2, Sparkles, X } from 'lucide-react'
+import { Lock, Loader2, Sparkles, X, Plus, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface AnalysisResult {
   strengths: string[]
@@ -24,8 +25,10 @@ interface Competitor {
 interface Props {
   competitor: Competitor
   brandName: string
+  brandId: string
   canAnalyze: boolean
   rank: number
+  isTracked?: boolean
 }
 
 const LLM_SHORT: Record<string, string> = {
@@ -35,10 +38,33 @@ const LLM_SHORT: Record<string, string> = {
   GEMINI: 'GEM',
 }
 
-export function CompetitorRow({ competitor, brandName, canAnalyze, rank }: Props) {
+export function CompetitorRow({ competitor, brandName, brandId, canAnalyze, rank, isTracked: initialTracked = false }: Props) {
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState('')
+  const [tracked, setTracked] = useState(initialTracked)
+  const [trackLoading, setTrackLoading] = useState(false)
+  const router = useRouter()
+
+  async function handleTrack() {
+    setTrackLoading(true)
+    try {
+      const res = await fetch('/api/brands/track-competitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: competitor.name, parentBrandId: brandId, keywords: [] }),
+      })
+      const data = await res.json()
+      if (res.ok || res.status === 200) {
+        setTracked(true)
+        router.refresh()
+        if (data.brand?.id && !data.alreadyTracked) {
+          router.push(`/brands/${data.brand.id}`)
+        }
+      }
+    } catch { /* ignore */ }
+    setTrackLoading(false)
+  }
 
   async function handleAnalyze() {
     setLoading(true)
@@ -88,9 +114,22 @@ export function CompetitorRow({ competitor, brandName, canAnalyze, rank }: Props
           </p>
         </div>
 
-        {!canAnalyze ? (
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Track button */}
+          <Button
+            size="sm"
+            variant={tracked ? 'secondary' : 'outline'}
+            onClick={handleTrack}
+            disabled={trackLoading || tracked}
+            className="h-8 gap-1.5 text-xs"
+          >
+            {trackLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : tracked ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+            {tracked ? 'Suivi' : 'Suivre'}
+          </Button>
+
+          {!canAnalyze ? (
           <Link href="/billing">
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-muted-foreground shrink-0">
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" />
               Pro
             </Button>
@@ -116,6 +155,7 @@ export function CompetitorRow({ competitor, brandName, canAnalyze, rank }: Props
             {loading ? 'Analyse...' : 'Analyser'}
           </Button>
         )}
+        </div>
       </div>
 
       {error && <p className="text-xs text-destructive pl-8">{error}</p>}

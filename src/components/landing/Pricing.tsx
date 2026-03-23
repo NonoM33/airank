@@ -212,17 +212,6 @@ export function Pricing() {
           ))}
         </div>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ delay: 0.6 }}
-          className="text-center text-sm text-muted-foreground mt-8"
-        >
-          💡 Lifetime Deal disponible à 59€ — Accès à vie au plan Pro.{' '}
-          <Link href="/signup" className="text-primary hover:underline">
-            En savoir plus →
-          </Link>
-        </motion.p>
       </div>
     </section>
   )

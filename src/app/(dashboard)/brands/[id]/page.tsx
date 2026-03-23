@@ -123,7 +123,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     try { return JSON.parse(brand.keywords) as string[] } catch { return [] }
   })()
 
-  const [allScans, allScanResults, scheduledScan] = await Promise.all([
+  const [allScans, allScanResults, scheduledScan, trackedCompetitors] = await Promise.all([
     prisma.scan.findMany({
       where: { brandId: brand.id },
       orderBy: { createdAt: 'desc' },
@@ -135,6 +135,17 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     }),
     prisma.scheduledScan.findFirst({
       where: { brandId: brand.id, userId },
+    }),
+    prisma.brand.findMany({
+      where: { userId, isCompetitor: true, parentBrandId: brand.id },
+      include: {
+        scans: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { globalScore: true, createdAt: true, results: { select: { llm: true, mentioned: true, score: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     }),
   ])
 
@@ -163,6 +174,8 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
     }
   }
 
+  const trackedNames = new Set(trackedCompetitors.map((c) => c.name.toLowerCase()))
+
   const sortedCompetitors = Array.from(competitorStats.entries())
     .sort((a, b) => b[1].llms.size - a[1].llms.size || b[1].totalMentions - a[1].totalMentions)
     .map(([name, stats]) => ({
@@ -171,6 +184,7 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
       llms: Array.from(stats.llms),
       scanCount: stats.scanIds.size,
       totalMentions: stats.totalMentions,
+      isTracked: trackedNames.has(name.toLowerCase()),
     }))
 
   const recommendations = latestScan
@@ -323,8 +337,10 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
                     key={competitor.name}
                     competitor={competitor}
                     brandName={brand.name}
+                    brandId={brand.id}
                     canAnalyze={canAnalyzeCompetitors}
                     rank={idx + 1}
+                    isTracked={competitor.isTracked}
                   />
                 ))}
               </div>
@@ -372,6 +388,61 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ id
                 <p className="text-sm text-muted-foreground">Lancez un scan pour obtenir des recommandations</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tracked Competitors ─────────────────────────────────────────────── */}
+      {trackedCompetitors.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold">Concurrents suivis</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{trackedCompetitors.length} concurrent{trackedCompetitors.length > 1 ? 's' : ''} en suivi actif</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {trackedCompetitors.map((comp) => {
+              const latestScan = comp.scans[0]
+              const score = latestScan?.globalScore ?? null
+              const mentionedCount = latestScan?.results.filter((r) => r.mentioned).length ?? 0
+              return (
+                <Link key={comp.id} href={`/brands/${comp.id}`} className="group">
+                  <div className="card-glow rounded-xl border border-border bg-card p-4 hover:border-primary/40 transition-colors">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{comp.name}</p>
+                        {comp.domain && <p className="text-xs text-muted-foreground truncate mt-0.5">{comp.domain}</p>}
+                      </div>
+                      {score !== null ? (
+                        <span className={`text-2xl font-bold font-mono ml-3 shrink-0 ${getScoreColor(score)}`}>{score}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm ml-3">—</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{mentionedCount}/4 LLMs</span>
+                      {score !== null && (
+                        <>
+                          <span>·</span>
+                          <span className={getScoreColor(score)}>{getScoreLabel(score)}</span>
+                        </>
+                      )}
+                      {!latestScan && <span className="text-amber-400">Aucun scan</span>}
+                    </div>
+                    {/* Score bar */}
+                    {score !== null && (
+                      <div className="mt-3 h-1 rounded-full bg-border overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${score}%`, backgroundColor: getGaugeColor(score) }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       )}

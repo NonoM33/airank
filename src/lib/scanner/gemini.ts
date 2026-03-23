@@ -13,7 +13,7 @@ Réponds de manière détaillée. À la fin de ta réponse, ajoute une section s
 mentioned: [true/false si tu as mentionné ${brandName}]
 position: [numéro de position si mentionné, sinon null]
 sentiment: [POSITIVE/NEUTRAL/NEGATIVE]
-competitors: [liste des NOMS DE MARQUES/ENTREPRISES concurrentes mentionnées, séparées par des virgules, PAS de concepts génériques]
+competitors: [noms propres d'entreprises/marques UNIQUEMENT cités dans ta réponse, ex: "OuiCare, Domidom, Amplitude". INTERDIT: descriptions, thèmes, services, adjectifs, phrases. Max 6 entrées. null si aucune entreprise concurrente citée.]
 ---END_AIRANK_DATA---`
   const rawResponse = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt)
   return parseResponse(rawResponse, brandName, 'GEMINI')

@@ -10,20 +10,29 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  email          String          @unique
-  name           String?
-  image          String?
-  password       String?
-  plan           Plan            @default(FREE)
-  credits        Int             @default(2)
-  stripeId       String?         @unique
-  brands         Brand[]
-  accounts       Account[]
-  sessions       Session[]
-  creditUsages   CreditUsage[]
-  scheduledScans ScheduledScan[]
-  createdAt      DateTime        @default(now())
+  id                   String           @id @default(cuid())
+  email                String           @unique
+  name                 String?
+  image                String?
+  password             String?
+  plan                 Plan             @default(FREE)
+  credits              Int              @default(20)
+  stripeId             String?          @unique
+  sector               String?
+  referralCode         String?          @unique
+  onboardingCompleted  Boolean          @default(false)
+  onboardingStep       Int              @default(0)
+  brands               Brand[]
+  accounts             Account[]
+  sessions             Session[]
+  creditUsages         CreditUsage[]
+  scheduledScans       ScheduledScan[]
+  scoreAlerts          ScoreAlert[]
+  referralsSent        Referral[]       @relation("ReferralsSent")
+  referralReceived     Referral?        @relation("ReferralReceived")
+  scoreObjectives      ScoreObjective[]
+  webhookConfigs       WebhookConfig[]
+  createdAt            DateTime         @default(now())
 }
 
 model Account {
@@ -61,16 +70,21 @@ model VerificationToken {
 }
 
 model Brand {
-  id             String          @id @default(cuid())
-  name           String
-  domain         String?
-  keywords       String          @default("[]") // JSON array of strings
-  userId         String
-  user           User            @relation(fields: [userId], references: [id])
-  scans          Scan[]
-  competitors    Competitor[]
-  scheduledScans ScheduledScan[]
-  createdAt      DateTime        @default(now())
+  id              String           @id @default(cuid())
+  name            String
+  domain          String?
+  keywords        String           @default("[]") // JSON array of strings
+  sector          String?
+  isCompetitor    Boolean          @default(false)
+  parentBrandId   String?          // For tracked competitors: which brand detected them
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  scans           Scan[]
+  competitors     Competitor[]
+  scheduledScans  ScheduledScan[]
+  scoreAlerts     ScoreAlert[]
+  scoreObjectives ScoreObjective[]
+  createdAt       DateTime         @default(now())
 }
 
 model Competitor {
@@ -87,6 +101,7 @@ model Scan {
   query       String
   results     ScanResult[]
   globalScore Int          @default(0)
+  llmCount    Int          @default(0) // how many LLMs responded (for confidence score)
   createdAt   DateTime     @default(now())
 }
 
@@ -101,6 +116,7 @@ model ScanResult {
   sentiment   Sentiment?
   competitors String    @default("[]") // JSON array of strings
   rawResponse String
+  score       Int       @default(0)   // per-LLM score (0-100)
 }
 
 model CreditUsage {
@@ -134,6 +150,70 @@ model ScheduledScan {
   lastRunAt DateTime?
   enabled   Boolean   @default(true)
   createdAt DateTime  @default(now())
+}
+
+// Alerts: drift detection & competitor appeared
+model ScoreAlert {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  type      String   // 'drift' | 'competitor_appeared'
+  llm       String?
+  message   String
+  data      String   @default("{}") // JSON with extra context
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Referral program
+model Referral {
+  id             String    @id @default(cuid())
+  referrerId     String
+  referrer       User      @relation("ReferralsSent", fields: [referrerId], references: [id])
+  referredUserId String?   @unique
+  referredUser   User?     @relation("ReferralReceived", fields: [referredUserId], references: [id])
+  code           String    @unique
+  usedAt         DateTime?
+  rewardGranted  Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+}
+
+// Score objective tracker
+model ScoreObjective {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  targetScore Int
+  targetDate  DateTime
+  achieved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, brandId])
+}
+
+// Webhook configurations (Agency plan)
+model WebhookConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  events    String   @default("[]") // JSON array: ["scan.completed", "alert.created"]
+  secret    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// Predefined query templates by sector
+model QueryTemplate {
+  id       String @id @default(cuid())
+  sector   String
+  query    String
+  language String @default("fr")
+  plan     String @default("all") // 'all' | 'pro' | 'agency'
 }
 
 enum Plan {

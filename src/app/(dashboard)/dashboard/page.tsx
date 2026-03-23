@@ -6,6 +6,9 @@ import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
 import { DashboardOnboarding } from '@/components/dashboard/DashboardOnboarding'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
 import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
+import { NextBestAction } from '@/components/dashboard/NextBestAction'
+import { ScoreObjective } from '@/components/dashboard/ScoreObjective'
+import { OnboardingWizardWrapper } from '@/components/dashboard/OnboardingWizardWrapper'
 import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap, Settings } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -69,16 +72,25 @@ export default async function DashboardPage() {
   const session = await auth()
   const userId = session!.user.id
 
-  const allBrands = await prisma.brand.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  })
+  const [allBrands, dbUser] = await Promise.all([
+    prisma.brand.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { onboardingCompleted: true, plan: true },
+    }),
+  ])
+
+  const showOnboarding = !dbUser?.onboardingCompleted
 
   // ── 0 brands: onboarding ───────────────────────────────────────────────────
 
   if (allBrands.length === 0) {
     return (
       <div className="p-4 lg:p-6 space-y-6">
+        {showOnboarding && <OnboardingWizardWrapper />}
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Bienvenue sur AIRank</p>
@@ -279,7 +291,7 @@ export default async function DashboardPage() {
     keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
   }))
 
-  const [latestScan, prevScan, chartScans, recentScans, allResults] = await Promise.all([
+  const [latestScan, prevScan, chartScans, recentScans, allResults, scoreObjective] = await Promise.all([
     prisma.scan.findFirst({
       where: { brandId: brand.id },
       orderBy: { createdAt: 'desc' },
@@ -308,6 +320,9 @@ export default async function DashboardPage() {
     prisma.scanResult.findMany({
       where: { scan: { brandId: brand.id } },
       select: { competitors: true },
+    }),
+    prisma.scoreObjective.findUnique({
+      where: { userId_brandId: { userId, brandId: brand.id } },
     }),
   ])
 
@@ -413,6 +428,17 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      {/* ── Next Best Action ────────────────────────────────────────────────── */}
+      <NextBestAction
+        scans={recentScans.map((s) => ({
+          globalScore: s.globalScore,
+          createdAt: s.createdAt.toISOString(),
+          results: s.results.map((r) => ({ llm: r.llm, mentioned: r.mentioned })),
+        }))}
+        brandName={brand.name}
+        plan={dbUser?.plan ?? 'FREE'}
+      />
+
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {recentScans.length === 0 && (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8 text-center">
@@ -438,6 +464,15 @@ export default async function DashboardPage() {
               <h3 className="text-sm font-semibold mb-3">Nouveau scan</h3>
               <NewScanForm brands={brandsForForm} defaultBrandId={brand.id} />
             </div>
+            <ScoreObjective
+              brandId={brand.id}
+              currentScore={globalScore}
+              objective={scoreObjective ? {
+                targetScore: scoreObjective.targetScore,
+                targetDate: scoreObjective.targetDate.toISOString(),
+                achieved: scoreObjective.achieved,
+              } : null}
+            />
             <Link
               href={`/brands/${brand.id}`}
               className="card-glow rounded-xl bg-card border border-border p-4 flex items-center justify-between gap-2 hover:border-primary/50 transition-colors group"

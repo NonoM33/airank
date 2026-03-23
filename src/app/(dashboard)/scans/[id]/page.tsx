@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react'
 import { generateRecommendations } from '@/lib/recommendations'
 import { ContentGenerateButton } from '@/components/dashboard/ContentGenerateButton'
+import { ScoreGauge } from '@/components/dashboard/ScoreGauge'
+import { ConfidenceBadge } from '@/components/dashboard/ConfidenceBadge'
+import { MentionHighlight } from '@/components/dashboard/MentionHighlight'
 
 // ─── Score helpers ────────────────────────────────────────────────────────────
 
@@ -15,22 +18,6 @@ function getLLMScore(r: { mentioned: boolean; position: number | null; sentiment
   const pos = r.position ? Math.max(20, 100 - (r.position - 1) * 8) : 50
   const mult = r.sentiment === 'POSITIVE' ? 1.0 : r.sentiment === 'NEGATIVE' ? 0.3 : 0.7
   return Math.round(pos * mult)
-}
-
-function getScoreLabel(score: number) {
-  if (score >= 90) return { text: 'Leader IA', color: 'text-indigo-400' }
-  if (score >= 70) return { text: 'Très visible', color: 'text-green-400' }
-  if (score >= 50) return { text: 'Visible', color: 'text-amber-400' }
-  if (score >= 30) return { text: 'Peu visible', color: 'text-orange-400' }
-  return { text: 'Invisible', color: 'text-red-400' }
-}
-
-function getGaugeColor(score: number) {
-  if (score >= 90) return '#6366F1'
-  if (score >= 70) return '#22C55E'
-  if (score >= 50) return '#F59E0B'
-  if (score >= 30) return '#F97316'
-  return '#EF4444'
 }
 
 function getScoreTextColor(score: number) {
@@ -74,38 +61,6 @@ const PRIORITY_BADGE = {
   optimization: 'bg-green-500/20 text-green-400',
 }
 
-// ─── Gauge SVG ────────────────────────────────────────────────────────────────
-
-function ScoreGauge({ score }: { score: number }) {
-  const r = 64
-  const circumference = 2 * Math.PI * r
-  const dashOffset = circumference * (1 - score / 100)
-  const color = getGaugeColor(score)
-  const label = getScoreLabel(score)
-
-  return (
-    <div className="flex flex-col items-center gap-2 shrink-0">
-      <div className="relative w-40 h-40">
-        <svg className="w-40 h-40" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="80" cy="80" r={r} fill="none" stroke="#27272A" strokeWidth="10" />
-          <circle
-            cx="80" cy="80" r={r}
-            fill="none" stroke={color} strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-4xl font-bold font-mono ${getScoreTextColor(score)}`}>{score}</span>
-          <span className="text-xs text-muted-foreground">/ 100</span>
-        </div>
-      </div>
-      <span className={`text-sm font-semibold ${label.color}`}>{label.text}</span>
-    </div>
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ScanDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -141,6 +96,8 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
   const competitors = Array.from(competitorMap.entries())
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, 10)
+
+  const competitorNames = competitors.map(([name]) => name)
 
   const mentionedCount = scan.results.filter((r) => r.mentioned).length
 
@@ -205,13 +162,7 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
               {scan.brand.name} · {date}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
-              <span className={`text-xs font-medium rounded-full px-3 py-1 ${
-                mentionedCount >= 3 ? 'bg-green-500/20 text-green-400' :
-                mentionedCount >= 2 ? 'bg-amber-500/20 text-amber-400' :
-                'bg-red-500/20 text-red-400'
-              }`}>
-                {mentionedCount}/{scan.results.length} LLMs
-              </span>
+              <ConfidenceBadge llmCount={mentionedCount} totalLlms={scan.results.length} />
               {scan.brand.domain && (
                 <span className="text-xs bg-secondary border border-border rounded-full px-3 py-1 text-muted-foreground">
                   {scan.brand.domain}
@@ -392,9 +343,13 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
                     <span className="text-xs text-muted-foreground hidden group-open:inline">▼ Masquer</span>
                   </summary>
                   <div className="px-5 pb-5 pt-3 border-t border-border">
-                    <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
-                      {result.rawResponse}
-                    </pre>
+                    <div className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
+                      <MentionHighlight
+                        text={result.rawResponse ?? ''}
+                        brandName={brandName}
+                        competitors={competitorNames}
+                      />
+                    </div>
                     {result.rawResponse.length > 300 && (
                       <div className="mt-3 pt-3 border-t border-border">
                         <ContentGenerateButton

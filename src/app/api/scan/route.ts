@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { scanBrand } from '@/lib/scanner'
 import { calculateGlobalScore } from '@/lib/analysis'
 import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
+import { calculateLLMScore } from '@/lib/analysis'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
           sentiment: r.sentiment,
           competitors: JSON.stringify(r.competitors),
           rawResponse: r.rawResponse,
+          score: calculateLLMScore(r),
         })),
       },
     },

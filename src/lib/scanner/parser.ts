@@ -36,7 +36,8 @@ function parseAirankBlock(text: string): { data: AirankData; cleanText: string }
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'aucune' && s.length > 1)
-      .slice(0, 8)
+      .filter(isLikelyBrandName)
+      .slice(0, 6)
   }
 
   return { data: { mentioned, position, sentiment, competitors }, cleanText }
@@ -185,6 +186,33 @@ function extractCompetitors(text: string, excludeBrand: string): string[] {
   }
 
   return Array.from(competitors).slice(0, 8)
+}
+
+// Words that appear at the START of descriptions/themes, never in brand names
+const DESCRIPTION_PREFIXES = new Set([
+  'service', 'services', 'problème', 'problèmes', 'fiabilité', 'avis',
+  'organisation', 'solutions', 'solution', 'maintien', 'qualité',
+  'gestion', 'manque', 'absence', 'difficulté', 'coût', 'prix',
+  'tarif', 'tarifs', 'accès', 'délai', 'délais', 'support', 'aide',
+  'fonctionnalité', 'interface', 'performance', 'rapidité', 'lenteur',
+])
+
+/**
+ * Strict brand name validation — rejects phrases/descriptions.
+ * A brand name should be 1-3 short words, not starting with a description word.
+ */
+function isLikelyBrandName(name: string): boolean {
+  const trimmed = name.trim()
+  if (trimmed.length < 2 || trimmed.length > 35) return false
+  const words = trimmed.split(/\s+/)
+  // More than 4 words → almost certainly a description, not a brand
+  if (words.length > 4) return false
+  // Starts with a generic description word → not a brand
+  const firstWord = words[0].toLowerCase().replace(/[^a-zàâäéèêëîïôùûü]/g, '')
+  if (DESCRIPTION_PREFIXES.has(firstWord)) return false
+  // All lowercase and more than 2 words → description
+  if (words.length > 2 && trimmed === trimmed.toLowerCase()) return false
+  return true
 }
 
 const STOP_WORDS = new Set([

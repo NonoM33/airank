@@ -1,19 +1,19 @@
 import { prisma } from './db'
 
 export const CREDIT_COSTS = {
-  scan: 1,
-  competitor_analysis: 2,
-  content_article: 3,
-  content_faq: 2,
-  content_press: 2,
-  auto_scan: 1,
+  scan: 10,
+  competitor_analysis: 20,
+  content_article: 30,
+  content_faq: 20,
+  content_press: 20,
+  auto_scan: 10,
 } as const
 
 export const PLAN_CREDITS = {
-  FREE: 2,
-  STARTER: 50,
-  PRO: 200,
-  AGENCY: 1000,
+  FREE: 20,
+  STARTER: 500,
+  PRO: 2000,
+  AGENCY: 10000,
 } as const
 
 export async function useCredits(
