@@ -11,7 +11,7 @@ const credentialsSchema = z.object({
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 }, // 30 days
   pages: {
     signIn: '/login',
   },
@@ -39,14 +39,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
-      }
-      // Always refresh plan from DB to catch Stripe updates
-      if (token.id) {
-        const dbUser = await prisma.user.findUnique({ where: { id: token.id as string } })
+        // Fetch plan on first login
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id as string } })
         token.plan = dbUser?.plan ?? 'FREE'
+        token.planFetchedAt = Date.now()
+      }
+      // Refresh plan from DB every 5 minutes (not every request)
+      if (token.id && (!token.planFetchedAt || Date.now() - (token.planFetchedAt as number) > 5 * 60 * 1000 || trigger === 'update')) {
+        try {
+          const dbUser = await prisma.user.findUnique({ where: { id: token.id as string } })
+          token.plan = dbUser?.plan ?? 'FREE'
+          token.planFetchedAt = Date.now()
+        } catch {
+          // DB error — keep existing plan, don't logout
+        }
       }
       return token
     },

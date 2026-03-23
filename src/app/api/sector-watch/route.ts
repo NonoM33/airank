@@ -38,7 +38,6 @@ Réponds en JSON avec cette structure exacte :
 Fournis 3-5 tendances pertinentes. Réponds UNIQUEMENT avec le JSON, sans markdown.`
 }
 
-// POST /api/sector-watch — 2 credits, analyse sector trends via Gemini Flash
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -52,11 +51,25 @@ export async function POST(req: Request) {
   }
 
   const { sector, brandName, competitors } = parsed.data
-  const cost = CREDIT_COSTS.sector_watch
+  const COST = CREDIT_COSTS.sector_watch
+  const inputKey = { sector, brandName: brandName ?? null, competitors: competitors ?? null }
 
-  // Check credits first but don't debit yet
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'sector_watch',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < cost) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
@@ -64,13 +77,11 @@ export async function POST(req: Request) {
     const prompt = buildSectorPrompt(sector, brandName, competitors)
     const raw = await queryOpenRouter('google/gemini-2.0-flash-lite-001', prompt)
 
-    // Parse JSON response
     let analysis: Record<string, unknown>
     try {
       const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       analysis = JSON.parse(cleaned)
     } catch {
-      // Fallback if JSON parsing fails
       analysis = {
         trends: [],
         topKeywords: [],
@@ -80,8 +91,18 @@ export async function POST(req: Request) {
       }
     }
 
-    await useCredits(session.user.id, cost, 'sector_watch', `Veille secteur: ${sector}`)
-    return NextResponse.json({ sector, analysis, creditsUsed: cost })
+    await useCredits(session.user.id, COST, 'sector_watch', `Veille secteur: ${sector}`)
+    const resultData = { sector, analysis, creditsUsed: COST }
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'sector_watch',
+        input: inputKey,
+        result: resultData,
+        credits: COST,
+      },
+    })
+    return NextResponse.json(resultData)
   } catch (err) {
     console.error('[sector-watch] POST error:', err)
     return NextResponse.json(

@@ -4,12 +4,15 @@ import { queryOpenRouter } from '@/lib/scanner/openrouter'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { useCredits, getCredits } from '@/lib/credits'
+import { prisma } from '@/lib/db'
 
 const schema = z.object({
   text: z.string().min(50).max(10000),
   brandName: z.string().min(1).max(200),
   context: z.string().max(300).optional(),
 })
+
+const COST = 3
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -24,10 +27,24 @@ export async function POST(req: Request) {
   }
 
   const { text, brandName, context } = parsed.data
+  const inputKey = { text, brandName, context: context ?? null }
 
-  // Check credits first but don't debit yet
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'content_optimizer',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < 3) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
@@ -72,7 +89,16 @@ Réponds UNIQUEMENT en JSON valide:
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
-    await useCredits(session.user.id, 3, 'content_optimizer', '')
+    await useCredits(session.user.id, COST, 'content_optimizer', '')
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'content_optimizer',
+        input: inputKey,
+        result,
+        credits: COST,
+      },
+    })
     return NextResponse.json(result)
   } catch {
     return NextResponse.json({ error: 'Optimisation impossible. Réessayez.' }, { status: 500 })

@@ -5,6 +5,7 @@ import { queryOpenRouter } from '@/lib/scanner/openrouter'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
+import { prisma } from '@/lib/db'
 
 const schema = z.object({
   competitorName: z.string().min(1).max(200),
@@ -34,10 +35,25 @@ export async function POST(req: Request) {
   }
 
   const { competitorName, brandName, industry } = parsed.data
+  const COST = CREDIT_COSTS.competitor_analysis
+  const inputKey = { competitorName, brandName, industry: industry ?? null }
 
-  // Check credits first but don't debit yet
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'competitor_analysis',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < CREDIT_COSTS.competitor_analysis) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
@@ -58,7 +74,16 @@ Réponds UNIQUEMENT avec le JSON valide, sans markdown, sans commentaires, sans 
     const jsonMatch = response.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON in response')
     const data = JSON.parse(jsonMatch[0])
-    await useCredits(session.user.id, CREDIT_COSTS.competitor_analysis, 'competitor_analysis', `Analyse ${competitorName}`)
+    await useCredits(session.user.id, COST, 'competitor_analysis', `Analyse ${competitorName}`)
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'competitor_analysis',
+        input: inputKey,
+        result: data,
+        credits: COST,
+      },
+    })
     return NextResponse.json(data)
   } catch {
     return NextResponse.json(

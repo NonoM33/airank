@@ -2,8 +2,11 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { useCredits, getCredits } from '@/lib/credits'
+import { prisma } from '@/lib/db'
 
 const PSI_BASE = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
+
+const COST = 1
 
 async function fetchPSI(url: string, strategy: 'mobile' | 'desktop') {
   const apiUrl = `${PSI_BASE}?url=${encodeURIComponent(url)}&strategy=${strategy}&category=performance`
@@ -61,9 +64,24 @@ export async function POST(req: Request) {
   let url = body.url.trim()
   if (!url.startsWith('http')) url = 'https://' + url
 
-  // Check credits first but don't debit yet
+  const inputKey = { url }
+
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'site_performance',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < 1) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
@@ -72,11 +90,22 @@ export async function POST(req: Request) {
       fetchPSI(url, 'mobile'),
       fetchPSI(url, 'desktop'),
     ])
-    return NextResponse.json({
+    await useCredits(session.user.id, COST, 'site_performance', url)
+    const resultData = {
       url,
       mobile: extractMetrics(mobileData),
       desktop: extractMetrics(desktopData),
+    }
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'site_performance',
+        input: inputKey,
+        result: resultData,
+        credits: COST,
+      },
     })
+    return NextResponse.json(resultData)
   } catch {
     return NextResponse.json(
       { error: "Impossible d'analyser ce site. Vérifiez l'URL et réessayez." },

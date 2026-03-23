@@ -4,11 +4,14 @@ import { queryOpenRouter } from '@/lib/scanner/openrouter'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { useCredits, getCredits } from '@/lib/credits'
+import { prisma } from '@/lib/db'
 
 const schema = z.object({
   brandName: z.string().min(1).max(200),
   text: z.string().min(10).max(10000),
 })
+
+const COST = 1
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -23,10 +26,24 @@ export async function POST(req: Request) {
   }
 
   const { brandName, text } = parsed.data
+  const inputKey = { brandName, text }
 
-  // Check credits first but don't debit yet
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'citation_analysis',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < 1) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
@@ -77,7 +94,18 @@ Analyse en détail et réponds UNIQUEMENT en JSON valide:
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
-    return NextResponse.json({ brandName, ...result })
+    await useCredits(session.user.id, COST, 'citation_analysis', brandName)
+    const resultData = { brandName, ...result }
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'citation_analysis',
+        input: inputKey,
+        result: resultData,
+        credits: COST,
+      },
+    })
+    return NextResponse.json(resultData)
   } catch {
     return NextResponse.json({ error: 'Analyse impossible. Réessayez.' }, { status: 500 })
   }
