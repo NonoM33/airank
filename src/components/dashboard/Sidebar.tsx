@@ -58,20 +58,25 @@ interface SidebarProps {
   userName: string
   userEmail: string
   userPlan: string
-  credits: number
-  creditsMax: number
 }
 
 function SidebarInner({
   userName,
   userEmail,
   userPlan,
-  credits,
-  creditsMax,
   onClose,
 }: SidebarProps & { onClose?: () => void }) {
   const pathname = usePathname()
+  const [credits, setCredits] = useState(0)
+  const creditsMax = PLAN_CREDITS_MAP[userPlan] ?? 20
   const pct = creditsMax > 0 ? Math.min(100, Math.round((credits / creditsMax) * 100)) : 0
+
+  useEffect(() => {
+    fetch('/api/credits')
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.credits === 'number') setCredits(d.credits) })
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-card border-r border-border">
@@ -172,7 +177,7 @@ function SidebarInner({
   )
 }
 
-export function Sidebar({ userName, userEmail, userPlan, credits, creditsMax }: SidebarProps) {
+export function Sidebar({ userName, userEmail, userPlan }: SidebarProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -210,8 +215,6 @@ export function Sidebar({ userName, userEmail, userPlan, credits, creditsMax }: 
           userName={userName}
           userEmail={userEmail}
           userPlan={userPlan}
-          credits={credits}
-          creditsMax={creditsMax}
           onClose={() => setOpen(false)}
         />
       </div>
@@ -222,8 +225,6 @@ export function Sidebar({ userName, userEmail, userPlan, credits, creditsMax }: 
           userName={userName}
           userEmail={userEmail}
           userPlan={userPlan}
-          credits={credits}
-          creditsMax={creditsMax}
         />
       </div>
     </>

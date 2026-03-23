@@ -1,47 +1,64 @@
-export const dynamic = "force-dynamic"
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { ScansHeatmap, type HeatmapScan } from '@/components/dashboard/ScansHeatmap'
 import { BarChart2 } from 'lucide-react'
-import { HeatmapBrandSelector } from './HeatmapClient'
 
-export default async function HeatmapPage({ searchParams }: { searchParams: Promise<{ brand?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
+interface Brand {
+  id: string
+  name: string
+}
 
-  const plan = (session.user as { plan?: string }).plan ?? 'FREE'
-  const params = await searchParams
+export default function HeatmapPage() {
+  const { data: session } = useSession()
+  const [brands, setBrands] = useState<Brand[] | null>(null)
+  const [scans, setScans] = useState<HeatmapScan[]>([])
 
-  const brands = await prisma.brand.findMany({
-    where: { userId: session.user.id },
-    select: { id: true, name: true },
-    take: 50,
-  })
+  useEffect(() => {
+    fetch('/api/brands')
+      .then((r) => r.json())
+      .then((data: Brand[]) => {
+        setBrands(data)
+        const firstId = data[0]?.id
+        if (firstId) {
+          return fetch(`/api/scans?brandId=${firstId}&take=20&results=true`)
+            .then((r) => r.json())
+            .then((rawScans: { id: string; query: string; results: { llm: string; mentioned: boolean; score: number | null }[] }[]) => {
+              setScans(rawScans.map((s) => ({
+                id: s.id,
+                query: s.query,
+                results: s.results.map((r) => ({
+                  llm: r.llm,
+                  mentioned: r.mentioned,
+                  score: r.score,
+                })),
+              })))
+            })
+        }
+      })
+      .catch(() => setBrands([]))
+  }, [])
 
-  const selectedBrandId = params.brand || brands[0]?.id
-  const selectedBrand = brands.find(b => b.id === selectedBrandId) || brands[0]
+  const plan = (session?.user as { plan?: string })?.plan ?? 'FREE'
 
-  let scans: HeatmapScan[] = []
-
-  if (selectedBrand) {
-    const rawScans = await prisma.scan.findMany({
-      where: { brandId: selectedBrand.id },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-      include: { results: true },
-    })
-
-    scans = rawScans.map((s) => ({
-      id: s.id,
-      query: s.query,
-      results: s.results.map((r) => ({
-        llm: r.llm,
-        mentioned: r.mentioned,
-        score: r.score,
-      })),
-    }))
+  if (!brands) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <BarChart2 className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Heatmap Requêtes × LLMs</h1>
+            <p className="text-sm text-muted-foreground">Chargement…</p>
+          </div>
+        </div>
+      </div>
+    )
   }
+
+  const brandId = brands[0]?.id ?? ''
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -63,11 +80,12 @@ export default async function HeatmapPage({ searchParams }: { searchParams: Prom
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
-          <HeatmapBrandSelector
-            brands={brands.map(b => ({ id: b.id, name: b.name }))}
-            selectedId={selectedBrand?.id ?? ''}
-          />
-          <ScansHeatmap brandId={selectedBrand?.id ?? ''} scans={scans} plan={plan} />
+          {brands.length > 1 && (
+            <p className="text-xs text-muted-foreground mb-4">
+              Marque affichée : <span className="text-foreground font-medium">{brands[0].name}</span>
+            </p>
+          )}
+          <ScansHeatmap brandId={brandId} scans={scans} plan={plan} />
         </div>
       )}
     </div>

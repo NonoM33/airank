@@ -1,29 +1,39 @@
-export const dynamic = "force-dynamic"
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+'use client'
+
+import { useEffect, useState } from 'react'
 import { BillingClient } from '@/components/dashboard/BillingClient'
-import { PLANS } from '@/lib/stripe'
 import { getPlanLimits } from '@/lib/plan-limits'
 
-export default async function BillingPage() {
-  const session = await auth()
-  const userId = session!.user.id
-  const plan = session!.user.plan ?? 'FREE'
+interface BillingData {
+  user: { stripeId: string | null; plan: string; credits: number } | null
+  creditUsage: { id: string; action: string; amount: number; details: string | null; createdAt: string }[]
+  brandCount: number
+  plans: Record<string, { name: string; price: number; priceId: string }>
+}
 
-  const [user, creditUsage] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { stripeId: true, plan: true, credits: true },
-    }),
-    prisma.creditUsage.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ])
+export default function BillingPage() {
+  const [data, setData] = useState<BillingData | null>(null)
 
+  useEffect(() => {
+    fetch('/api/billing')
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => {})
+  }, [])
+
+  if (!data) {
+    return (
+      <div className="p-6 lg:p-8 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Abonnement</h1>
+          <p className="text-muted-foreground">Chargement…</p>
+        </div>
+      </div>
+    )
+  }
+
+  const plan = data.user?.plan ?? 'FREE'
   const limits = getPlanLimits(plan)
-  const brandCount = await prisma.brand.count({ where: { userId } })
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -34,17 +44,11 @@ export default async function BillingPage() {
 
       <BillingClient
         currentPlan={plan}
-        stripeId={user?.stripeId ?? null}
+        stripeId={data.user?.stripeId ?? null}
         limits={limits}
-        usage={{ brandCount, credits: user?.credits ?? 0 }}
-        plans={PLANS}
-        creditUsage={creditUsage.map((u) => ({
-          id: u.id,
-          action: u.action,
-          amount: u.amount,
-          details: u.details ?? null,
-          createdAt: u.createdAt.toISOString(),
-        }))}
+        usage={{ brandCount: data.brandCount, credits: data.user?.credits ?? 0 }}
+        plans={data.plans}
+        creditUsage={data.creditUsage}
       />
     </div>
   )

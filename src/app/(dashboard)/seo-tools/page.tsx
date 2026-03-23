@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { CreditCTA } from '@/components/ui/credit-cta'
 import {
   Search,
   FileText,
@@ -75,7 +76,7 @@ function SeoAuditTool() {
         body: JSON.stringify({ url, brandName: brandName || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Erreur'); return }
+      if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
       setResult(data)
     } catch {
       setError('Erreur réseau')
@@ -115,9 +116,11 @@ function SeoAuditTool() {
       <p className="text-xs text-muted-foreground">Coût : 2 crédits</p>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </div>
+        error === '__CREDIT__' ? <CreditCTA variant="banner" /> : (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )
       )}
 
       {result && (
@@ -212,7 +215,7 @@ function ContentOptimizerTool() {
         body: JSON.stringify({ text, brandName, context: context || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Erreur'); return }
+      if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
       setResult(data)
     } catch {
       setError('Erreur réseau')
@@ -248,9 +251,11 @@ function ContentOptimizerTool() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </div>
+        error === '__CREDIT__' ? <CreditCTA variant="banner" /> : (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )
       )}
 
       {result && (
@@ -328,7 +333,7 @@ function FaqGeneratorTool() {
         body: JSON.stringify({ brandName, industry, focus: focus || undefined, count }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Erreur'); return }
+      if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
       setResult(data)
     } catch {
       setError('Erreur réseau')
@@ -370,9 +375,11 @@ function FaqGeneratorTool() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </div>
+        error === '__CREDIT__' ? <CreditCTA variant="banner" /> : (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )
       )}
 
       {result && (
@@ -450,7 +457,7 @@ function CitationAnalysisTool() {
         body: JSON.stringify({ brandName, text }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Erreur'); return }
+      if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
       setResult(data)
     } catch {
       setError('Erreur réseau')
@@ -477,9 +484,11 @@ function CitationAnalysisTool() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </div>
+        error === '__CREDIT__' ? <CreditCTA variant="banner" /> : (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )
       )}
 
       {result && (

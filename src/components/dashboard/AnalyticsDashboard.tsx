@@ -1,5 +1,7 @@
 'use client'
 
+import { CreditCTA } from '@/components/ui/credit-cta'
+
 import { useState } from 'react'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -98,7 +100,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
     try {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brandId }) })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Erreur')
+      if (!res.ok) throw new Error(res.status === 402 ? '__CREDIT__' : (json.error ?? 'Erreur'))
       setter({ loading: false, data: json, err: '' })
     } catch (e) {
       setter({ loading: false, data: null, err: (e as Error).message })
@@ -124,7 +126,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
 
       {/* Benchmark sectoriel */}
       <AnalysisCard title="Benchmark Sectoriel" cost={3} loading={benchmark.loading} onAnalyze={() => call('/api/benchmark', setBenchmark)}>
-        {benchmark.err && <p className="text-xs text-red-400">{benchmark.err}</p>}
+        {benchmark.err && (benchmark.err === "__CREDIT__" ? <CreditCTA variant="inline" /> : <p className="text-xs text-red-400">{benchmark.err}</p>)}
         {benchmark.data && (
           <div>
             <p className="text-xs text-muted-foreground mb-3">Secteur : <strong>{benchmark.data.sector}</strong> · {benchmark.data.scanCount} scan(s)</p>
@@ -145,7 +147,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
 
       {/* Sentiment deep */}
       <AnalysisCard title="Analyse Sentiment Profonde" cost={2} loading={sentiment.loading} onAnalyze={() => call('/api/sentiment-deep', setSentiment)}>
-        {sentiment.err && <p className="text-xs text-red-400">{sentiment.err}</p>}
+        {sentiment.err && (sentiment.err === "__CREDIT__" ? <CreditCTA variant="inline" /> : <p className="text-xs text-red-400">{sentiment.err}</p>)}
         {sentiment.data && (
           <div>
             <p className="text-xs text-muted-foreground mb-3">{sentiment.data.total} mention(s) analysées</p>
@@ -168,7 +170,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
 
       {/* Coverage matrix */}
       <AnalysisCard title="Matrice de Couverture" cost={2} loading={coverage.loading} onAnalyze={() => call('/api/coverage-matrix', setCoverage)}>
-        {coverage.err && <p className="text-xs text-red-400">{coverage.err}</p>}
+        {coverage.err && (coverage.err === "__CREDIT__" ? <CreditCTA variant="inline" /> : <p className="text-xs text-red-400">{coverage.err}</p>)}
         {coverage.data && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -205,7 +207,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
 
       {/* Authority score */}
       <AnalysisCard title="Score d'Autorité IA" cost={2} loading={authority.loading} onAnalyze={() => call('/api/authority-score', setAuthority)}>
-        {authority.err && <p className="text-xs text-red-400">{authority.err}</p>}
+        {authority.err && (authority.err === "__CREDIT__" ? <CreditCTA variant="inline" /> : <p className="text-xs text-red-400">{authority.err}</p>)}
         {authority.data && (
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="flex flex-col items-center gap-2 shrink-0">

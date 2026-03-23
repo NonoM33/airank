@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { PLANS } from '@/lib/stripe'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -24,5 +25,5 @@ export async function GET() {
     prisma.brand.count({ where: { userId } }),
   ])
 
-  return NextResponse.json({ user, creditUsage, brandCount })
+  return NextResponse.json({ user, creditUsage, brandCount, plans: PLANS })
 }

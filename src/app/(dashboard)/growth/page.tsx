@@ -1,22 +1,34 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
 import { ActionPlanTab } from './ActionPlanTab'
 import { ROISimulator } from './ROISimulator'
 import { HeadToHeadTab } from './HeadToHeadTab'
 import { WidgetTab } from './WidgetTab'
 
-export const metadata = { title: 'Croissance — AIRank' }
+interface Brand {
+  id: string
+  name: string
+}
 
-export default async function GrowthPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
+export default function GrowthPage() {
+  const [brands, setBrands] = useState<Brand[] | null>(null)
 
-  const brands = await prisma.brand.findMany({
-    where: { userId: session.user.id, isCompetitor: false },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  })
+  useEffect(() => {
+    fetch('/api/brands')
+      .then((r) => r.json())
+      .then((data: Brand[]) => setBrands(data))
+      .catch(() => setBrands([]))
+  }, [])
+
+  if (!brands) {
+    return (
+      <div className="p-6 max-w-2xl">
+        <h1 className="text-2xl font-bold mb-2">Outils de croissance</h1>
+        <p className="text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
 
   if (brands.length === 0) {
     return (

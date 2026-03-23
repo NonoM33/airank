@@ -1,6 +1,7 @@
-export const dynamic = "force-dynamic"
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, BarChart3, Zap, TrendingUp, Calendar } from 'lucide-react'
@@ -20,25 +21,64 @@ const LLM_SHORT: Record<string, string> = {
   GEMINI: 'GEM',
 }
 
-export default async function ScansPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ brand?: string }>
-}) {
-  const { brand: brandFilter } = await searchParams
-  const session = await auth()
-  const userId = session!.user.id
+interface Brand {
+  id: string
+  name: string
+  domain: string | null
+  keywords: string | string[]
+}
 
-  const brands = await prisma.brand.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  })
+interface Scan {
+  id: string
+  query: string
+  globalScore: number
+  createdAt: string
+  brand: { id: string; name: string }
+  results: { llm: string; mentioned: boolean; position: number | null }[]
+}
+
+export default function ScansPage() {
+  const searchParams = useSearchParams()
+  const brandFilter = searchParams.get('brand')
+
+  const [brands, setBrands] = useState<Brand[] | null>(null)
+  const [scans, setScans] = useState<Scan[]>([])
+
+  useEffect(() => {
+    fetch('/api/brands')
+      .then((r) => r.json())
+      .then((data: Brand[]) => {
+        setBrands(data)
+        const targetBrandId = brandFilter ?? data[0]?.id
+        if (targetBrandId) {
+          const url = brandFilter
+            ? `/api/scans?brandId=${brandFilter}&results=true`
+            : `/api/scans?results=true`
+          return fetch(url)
+            .then((r) => r.json())
+            .then(setScans)
+        }
+      })
+      .catch(() => setBrands([]))
+  }, [brandFilter])
+
+  if (!brands) {
+    return (
+      <div className="p-4 lg:p-6 space-y-6">
+        <h1 className="text-2xl font-bold">Scans</h1>
+        <p className="text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
 
   const brandsForForm = brands.map((b) => ({
     id: b.id,
     name: b.name,
     domain: b.domain ?? null,
-    keywords: (() => { try { return JSON.parse(b.keywords) as string[] } catch { return [] } })(),
+    keywords: (() => {
+      if (Array.isArray(b.keywords)) return b.keywords as string[]
+      try { return JSON.parse(b.keywords as string) as string[] } catch { return [] }
+    })(),
   }))
 
   if (brands.length === 0) {
@@ -59,24 +99,9 @@ export default async function ScansPage({
     )
   }
 
-  const activeBrand = brandFilter
-    ? (brands.find((b) => b.id === brandFilter) ?? null)
-    : null
-
-  const scans = await prisma.scan.findMany({
-    where: activeBrand
-      ? { brandId: activeBrand.id }
-      : { brand: { userId } },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      brand: { select: { id: true, name: true } },
-      results: { select: { llm: true, mentioned: true, position: true } },
-    },
-  })
-
+  const activeBrand = brandFilter ? (brands.find((b) => b.id === brandFilter) ?? null) : null
   const defaultBrandId = activeBrand?.id ?? brands[0].id
 
-  // Compute stats
   const avgScore = scans.length > 0
     ? Math.round(scans.reduce((sum, s) => sum + s.globalScore, 0) / scans.length)
     : 0
@@ -87,8 +112,6 @@ export default async function ScansPage({
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Scans</h1>
@@ -113,7 +136,6 @@ export default async function ScansPage({
         </div>
       </div>
 
-      {/* ── Stats row ──────────────────────────────────────────────────────── */}
       {scans.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="card-glow rounded-xl bg-card border border-border p-4">
@@ -147,7 +169,6 @@ export default async function ScansPage({
         </div>
       )}
 
-      {/* ── Scans table ────────────────────────────────────────────────────── */}
       {scans.length === 0 ? (
         <div className="card-glow rounded-xl bg-card border border-primary/20 p-8">
           <p className="text-sm text-muted-foreground mb-6 text-center">
@@ -189,7 +210,7 @@ export default async function ScansPage({
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-medium max-w-xs truncate">{scan.query}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
-                          {scan.createdAt.toLocaleDateString('fr-FR', {
+                          {new Date(scan.createdAt).toLocaleDateString('fr-FR', {
                             day: '2-digit', month: '2-digit', year: '2-digit',
                           })}
                         </p>
@@ -206,7 +227,7 @@ export default async function ScansPage({
                       )}
                       <td className="px-4 py-3.5 hidden sm:table-cell">
                         <p className="text-sm text-muted-foreground whitespace-nowrap">
-                          {scan.createdAt.toLocaleDateString('fr-FR', {
+                          {new Date(scan.createdAt).toLocaleDateString('fr-FR', {
                             day: '2-digit', month: '2-digit', year: '2-digit',
                             hour: '2-digit', minute: '2-digit',
                           })}

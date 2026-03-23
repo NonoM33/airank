@@ -1,7 +1,7 @@
-export const dynamic = 'force-dynamic'
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/db'
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, CheckCircle2, XCircle, Download } from 'lucide-react'
@@ -61,20 +61,70 @@ const PRIORITY_BADGE = {
   optimization: 'bg-green-500/20 text-green-400',
 }
 
+const DIFFICULTY_BADGE: Record<string, string> = {
+  facile: 'bg-green-500/20 text-green-400',
+  moyen: 'bg-amber-500/20 text-amber-400',
+  avancé: 'bg-red-500/20 text-red-400',
+}
+
+interface ScanResult {
+  id: string
+  llm: string
+  mentioned: boolean
+  position: number | null
+  sentiment: string | null
+  context: string | null
+  rawResponse: string | null
+  competitors: string
+}
+
+interface ScanData {
+  id: string
+  query: string
+  globalScore: number
+  createdAt: string
+  brand: { id: string; name: string; domain: string | null }
+  results: ScanResult[]
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function ScanDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const session = await auth()
-  const userId = session!.user.id
+export default function ScanDetailPage() {
+  const params = useParams()
+  const id = params.id as string
+  const [scan, setScan] = useState<ScanData | null | undefined>(undefined)
 
-  const scan = await prisma.scan.findFirst({
-    where: { id, brand: { userId } },
-    include: { brand: true, results: { orderBy: { llm: 'asc' } } },
-  })
-  if (!scan) notFound()
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/scan/${id}`)
+      .then((r) => {
+        if (r.status === 404) { setScan(null); return null }
+        return r.json()
+      })
+      .then((data) => { if (data) setScan(data) })
+      .catch(() => setScan(null))
+  }, [id])
 
-  const date = scan.createdAt.toLocaleDateString('fr-FR', {
+  if (scan === undefined) {
+    return (
+      <div className="p-4 lg:p-6">
+        <p className="text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (scan === null) {
+    return (
+      <div className="p-4 lg:p-6">
+        <p className="text-muted-foreground">Scan introuvable.</p>
+        <Link href="/scans" className="text-primary hover:underline text-sm mt-2 inline-block">
+          ← Retour aux scans
+        </Link>
+      </div>
+    )
+  }
+
+  const date = new Date(scan.createdAt).toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
@@ -98,7 +148,6 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
     .slice(0, 10)
 
   const competitorNames = competitors.map(([name]) => name)
-
   const mentionedCount = scan.results.filter((r) => r.mentioned).length
 
   const recommendations = generateRecommendations(
@@ -120,12 +169,6 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
   const quickWins = recommendations.filter(r => r.category === 'quick-win')
   const cetteSmaine = recommendations.filter(r => r.category === 'cette-semaine')
   const ceMois = recommendations.filter(r => r.category === 'ce-mois')
-
-  const DIFFICULTY_BADGE: Record<string, string> = {
-    facile: 'bg-green-500/20 text-green-400',
-    moyen: 'bg-amber-500/20 text-amber-400',
-    avancé: 'bg-red-500/20 text-red-400',
-  }
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
@@ -350,7 +393,7 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
                         competitors={competitorNames}
                       />
                     </div>
-                    {result.rawResponse.length > 300 && (
+                    {result.rawResponse && result.rawResponse.length > 300 && (
                       <div className="mt-3 pt-3 border-t border-border">
                         <ContentGenerateButton
                           brandId={brandId}
