@@ -9,6 +9,7 @@ import { WidgetTab } from './WidgetTab'
 interface Brand {
   id: string
   name: string
+  domain?: string | null
 }
 
 export default function GrowthPage() {

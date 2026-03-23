@@ -252,15 +252,21 @@ model ActionPlan {
 }
 
 model ActionItem {
-  id          String     @id @default(cuid())
-  planId      String
-  plan        ActionPlan @relation(fields: [planId], references: [id])
-  title       String
-  description String
-  impact      String
-  difficulty  String
-  done        Boolean    @default(false)
-  dueDate     DateTime?
+  id                 String     @id @default(cuid())
+  planId             String
+  plan               ActionPlan @relation(fields: [planId], references: [id])
+  title              String
+  description        String
+  impact             String
+  difficulty         String
+  done               Boolean    @default(false)
+  dueDate            DateTime?
+  steps              String     @default("[]") // JSON array of step strings
+  codeSnippet        String?
+  estimatedTime      String?
+  actionType         String?    // "schema_org" | "faq" | "meta_description" | "og_tags" | "canonical" | "structured_data" | "content" | "generic"
+  verificationStatus String?    // "implemented" | "partial" | "not_implemented"
+  verifiedAt         DateTime?
 }
 
 enum Plan {
