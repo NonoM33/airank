@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     })
     html = await res.text()
   } catch {
-    return NextResponse.json({ error: 'Impossible de récupérer la page. Vérifiez l\'URL.' }, { status: 422 })
+    return NextResponse.json({ error: `Impossible de récupérer la page "${parsed.data.url}". Le site ne répond pas ou l'URL est incorrecte. Essayez avec www (ex: www.exemple.fr).` }, { status: 422 })
   }
 
   // Truncate HTML for the prompt (keep structure, remove scripts/styles)
