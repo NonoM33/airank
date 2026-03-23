@@ -16,6 +16,7 @@ import {
   Bell,
   BarChart2,
   Columns,
+  Activity,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/scans', label: 'Scans', icon: Search, proOnly: false },
   { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
   { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
+  { href: '/analytics', label: 'Analytics', icon: Activity, proOnly: false },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
   { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
 ]
