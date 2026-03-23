@@ -18,6 +18,7 @@ import {
   Columns,
   Wrench,
   Activity,
+  TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,7 @@ const navItems = [
   { href: '/analytics', label: 'Analytics', icon: Activity, proOnly: false },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
   { href: '/veille', label: 'Veille', icon: Activity, proOnly: false },
+  { href: '/growth', label: 'Croissance', icon: TrendingUp, proOnly: false },
   { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
 ]
 

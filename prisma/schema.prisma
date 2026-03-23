@@ -243,6 +243,26 @@ model QueryTemplate {
   plan     String @default("all") // 'all' | 'pro' | 'agency'
 }
 
+model ActionPlan {
+  id        String       @id @default(cuid())
+  userId    String
+  brandId   String
+  items     ActionItem[]
+  createdAt DateTime     @default(now())
+}
+
+model ActionItem {
+  id          String     @id @default(cuid())
+  planId      String
+  plan        ActionPlan @relation(fields: [planId], references: [id])
+  title       String
+  description String
+  impact      String
+  difficulty  String
+  done        Boolean    @default(false)
+  dueDate     DateTime?
+}
+
 enum Plan {
   FREE
   STARTER
