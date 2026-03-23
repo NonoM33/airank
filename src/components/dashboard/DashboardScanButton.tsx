@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { notifyCreditsChanged } from '@/lib/credits-event'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ScanLine, Settings2 } from 'lucide-react'
@@ -37,6 +38,7 @@ export function DashboardScanButton({ brand }: Props) {
       const firstOk = results.find(
         (r) => r.status === 'fulfilled' && (r as PromiseFulfilledResult<{ scan: { id: string } }>).value?.scan?.id
       )
+      notifyCreditsChanged()
       if (firstOk && firstOk.status === 'fulfilled') {
         router.push(`/scans/${(firstOk as PromiseFulfilledResult<{ scan: { id: string } }>).value.scan.id}`)
       } else {

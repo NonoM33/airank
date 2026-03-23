@@ -1,5 +1,7 @@
 'use client'
 
+import { notifyCreditsChanged } from '@/lib/credits-event'
+
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,7 +32,7 @@ export function HeadToHeadTab() {
     })
     const data = await res.json()
     if (!res.ok) setError(data.error ?? 'Erreur')
-    else setResult(data)
+    else { setResult(data); notifyCreditsChanged() }
     setLoading(false)
   }
 

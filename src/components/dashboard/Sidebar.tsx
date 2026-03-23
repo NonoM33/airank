@@ -71,11 +71,18 @@ function SidebarInner({
   const creditsMax = PLAN_CREDITS_MAP[userPlan] ?? 20
   const pct = creditsMax > 0 ? Math.min(100, Math.round((credits / creditsMax) * 100)) : 0
 
-  useEffect(() => {
+  const refreshCredits = () => {
     fetch('/api/credits')
       .then((r) => r.json())
       .then((d) => { if (typeof d.credits === 'number') setCredits(d.credits) })
       .catch(() => {})
+  }
+
+  useEffect(() => {
+    refreshCredits()
+    // Listen for credit changes from tools
+    window.addEventListener('credits-changed', refreshCredits)
+    return () => window.removeEventListener('credits-changed', refreshCredits)
   }, [])
 
   return (

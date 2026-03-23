@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { notifyCreditsChanged } from '@/lib/credits-event'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,7 +84,7 @@ function SeoAuditTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
-      setResult(data)
+      setResult(data); notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {
@@ -220,7 +221,7 @@ function ContentOptimizerTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
-      setResult(data)
+      setResult(data); notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {
@@ -348,7 +349,7 @@ function FaqGeneratorTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
-      setResult(data)
+      setResult(data); notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {
@@ -487,7 +488,7 @@ function CitationAnalysisTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
-      setResult(data)
+      setResult(data); notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {
@@ -668,7 +669,7 @@ function PerformanceTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? '__CREDIT__' : data.error || 'Erreur'); return }
-      setResult(data)
+      setResult(data); notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {

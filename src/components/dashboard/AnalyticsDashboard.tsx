@@ -1,6 +1,7 @@
 'use client'
 
 import { CreditCTA } from '@/components/ui/credit-cta'
+import { notifyCreditsChanged } from '@/lib/credits-event'
 
 import { useState } from 'react'
 import {
@@ -101,7 +102,7 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brandId }) })
       const json = await res.json()
       if (!res.ok) throw new Error(res.status === 402 ? '__CREDIT__' : (json.error ?? 'Erreur'))
-      setter({ loading: false, data: json, err: '' })
+      setter({ loading: false, data: json, err: '' }); notifyCreditsChanged()
     } catch (e) {
       setter({ loading: false, data: null, err: (e as Error).message })
     }
