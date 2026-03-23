@@ -16,6 +16,7 @@ import {
   Bell,
   BarChart2,
   Columns,
+  Wrench,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, proOnly: false },
   { href: '/settings', label: 'Mes Marques', icon: Building2, proOnly: false },
   { href: '/scans', label: 'Scans', icon: Search, proOnly: false },
+  { href: '/seo-tools', label: 'Outils SEO', icon: Wrench, proOnly: false },
   { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
   { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
