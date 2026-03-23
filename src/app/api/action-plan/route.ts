@@ -31,10 +31,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
   }
 
-  const ok = await useCredits(session.user.id, ACTION_PLAN_COST, 'action_plan', `Plan 30j pour ${brand.name}`)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < ACTION_PLAN_COST) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const keywords = (() => { try { return JSON.parse(brand.keywords) } catch { return [] } })()
@@ -164,5 +164,6 @@ export async function PATCH(req: Request) {
     where: { id: itemId },
     data: { done },
   })
+  await useCredits(session.user.id, ACTION_PLAN_COST, 'action_plan', `Plan 30j pour ${brand.name}`)
   return NextResponse.json(updated)
 }

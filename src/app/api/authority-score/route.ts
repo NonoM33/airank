@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { useCredits } from '@/lib/credits'
+import { useCredits, getCredits, getCredits } from '@/lib/credits'
 import { prisma } from '@/lib/db'
 
 const schema = z.object({ brandId: z.string() })
@@ -28,27 +28,11 @@ export async function POST(req: Request) {
   })
   if (!brand) return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
 
-  const ok = await useCredits(session.user.id, 2, 'authority_score', `Score autorité pour ${brand.name}`)
-  if (!ok) return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
-
-  const allResults = brand.scans.flatMap(s => s.results)
-  const mentioned = allResults.filter(r => r.mentioned)
-
-  // Frequency: % of all results with a mention
-  const frequency = allResults.length > 0
-    ? Math.round((mentioned.length / allResults.length) * 100)
-    : 0
-
-  // Position: average normalized position score (1st=100, each step -8, min 20)
-  const posScores = mentioned
-    .filter(r => r.position)
-    .map(r => Math.max(20, 100 - ((r.position ?? 1) - 1) * 8))
-  const position = posScores.length > 0
-    ? Math.round(posScores.reduce((a, b) => a + b, 0) / posScores.length)
-    : 0
-
-  // Sentiment: weighted average
-  const sentMap = { POSITIVE: 100, NEUTRAL: 60, NEGATIVE: 10 } as const
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 2) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
+  } as const
   const sentScores = mentioned
     .filter(r => r.sentiment)
     .map(r => sentMap[r.sentiment as keyof typeof sentMap] ?? 60)
@@ -80,6 +64,7 @@ export async function POST(req: Request) {
   const grade = score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : score >= 35 ? 'D' : 'E'
   const label = score >= 80 ? 'Excellent' : score >= 65 ? 'Bon' : score >= 50 ? 'Moyen' : score >= 35 ? 'Faible' : 'Très faible'
 
+  await useCredits(session.user.id, 2, 'authority_score', '')
   return NextResponse.json({
     brandName: brand.name,
     score,

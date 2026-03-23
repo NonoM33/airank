@@ -35,15 +35,10 @@ export async function POST(req: Request) {
 
   const { competitorName, brandName, industry } = parsed.data
 
-  const ok = await useCredits(
-    session.user.id,
-    CREDIT_COSTS.competitor_analysis,
-    'competitor_analysis',
-    `Analyse ${competitorName}`
-  )
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < CREDIT_COSTS.competitor_analysis) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const industryStr = industry || 'votre secteur'
@@ -63,6 +58,7 @@ Réponds UNIQUEMENT avec le JSON valide, sans markdown, sans commentaires, sans 
     const jsonMatch = response.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON in response')
     const data = JSON.parse(jsonMatch[0])
+    await useCredits(session.user.id, CREDIT_COSTS.competitor_analysis, 'competitor_analysis', `Analyse ${competitorName}`)
     return NextResponse.json(data)
   } catch {
     return NextResponse.json(

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { useCredits } from '@/lib/credits'
+import { useCredits, getCredits, getCredits } from '@/lib/credits'
 import { prisma } from '@/lib/db'
 
 const schema = z.object({ brandId: z.string() })
@@ -42,18 +42,11 @@ export async function POST(req: Request) {
   })
   if (!brand) return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
 
-  const ok = await useCredits(session.user.id, 2, 'coverage_matrix', `Matrice couverture pour ${brand.name}`)
-  if (!ok) return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
-
-  // Deduplicate by query (keep most recent scan per query)
-  const seenQueries = new Set<string>()
-  const uniqueScans: typeof brand.scans = []
-  for (const scan of brand.scans) {
-    const key = scan.query.trim().slice(0, 80).toLowerCase()
-    if (!seenQueries.has(key)) {
-      seenQueries.add(key)
-      uniqueScans.push(scan)
-    }
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 2) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
+  }
   }
 
   const matrix = uniqueScans.slice(0, 10).map(scan => {

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { useCredits } from '@/lib/credits'
+import { useCredits, getCredits, getCredits } from '@/lib/credits'
 import { prisma } from '@/lib/db'
 import { queryOpenRouter } from '@/lib/scanner/openrouter'
 
@@ -38,11 +38,11 @@ export async function POST(req: Request) {
   })
   if (!brand) return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
 
-  const ok = await useCredits(session.user.id, 2, 'sentiment_deep', `Analyse sentiment pour ${brand.name}`)
-  if (!ok) return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
-
-  const mentionedResults = brand.scans.flatMap(s => s.results)
-  const emptyBar = LABELS.map(label => ({ label, CHATGPT: 0, CLAUDE: 0, PERPLEXITY: 0, GEMINI: 0 }))
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 2) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
+  }))
 
   if (mentionedResults.length === 0) {
     return NextResponse.json({ brandName: brand.name, barData: emptyBar, total: 0 })

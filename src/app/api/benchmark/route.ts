@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { useCredits } from '@/lib/credits'
+import { useCredits, getCredits, getCredits } from '@/lib/credits'
 import { prisma } from '@/lib/db'
 import { queryOpenRouter } from '@/lib/scanner/openrouter'
 
@@ -29,21 +29,11 @@ export async function POST(req: Request) {
   })
   if (!brand) return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
 
-  const ok = await useCredits(session.user.id, 3, 'benchmark', `Benchmark secteur pour ${brand.name}`)
-  if (!ok) return NextResponse.json({ error: 'Crédits insuffisants' }, { status: 402 })
-
-  const allResults = brand.scans.flatMap(s => s.results)
-
-  const frequency = allResults.length > 0
-    ? Math.round((allResults.filter(r => r.mentioned).length / allResults.length) * 100)
-    : 0
-
-  const mentionedWithPos = allResults.filter(r => r.mentioned && r.position)
-  const position = mentionedWithPos.length > 0
-    ? Math.round(mentionedWithPos.reduce((sum, r) => sum + Math.max(20, 100 - ((r.position ?? 1) - 1) * 8), 0) / mentionedWithPos.length)
-    : 0
-
-  const sentimentMap = { POSITIVE: 100, NEUTRAL: 60, NEGATIVE: 20 } as const
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 3) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
+  } as const
   const sentWithSentiment = allResults.filter(r => r.mentioned && r.sentiment)
   const sentiment = sentWithSentiment.length > 0
     ? Math.round(sentWithSentiment.reduce((sum, r) => sum + (sentimentMap[r.sentiment as keyof typeof sentimentMap] ?? 60), 0) / sentWithSentiment.length)
@@ -93,6 +83,7 @@ Réponds UNIQUEMENT avec ce JSON sans markdown: {"frequency":XX,"position":XX,"s
     }
   } catch { /* use defaults */ }
 
+  await useCredits(session.user.id, 3, 'benchmark', '')
   return NextResponse.json({
     brandName: brand.name,
     sector,

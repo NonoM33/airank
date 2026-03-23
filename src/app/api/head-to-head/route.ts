@@ -27,10 +27,10 @@ export async function POST(req: Request) {
 
   const { brand1, brand2, query } = parsed.data
 
-  const ok = await useCredits(session.user.id, HEAD_TO_HEAD_COST, 'head_to_head', `${brand1} vs ${brand2}`)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < HEAD_TO_HEAD_COST) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const [results1, results2] = await Promise.all([
@@ -53,6 +53,7 @@ export async function POST(req: Request) {
   const score1 = Math.round(results1.reduce((s, r) => s + scoreResult(r), 0) / Math.max(results1.length, 1))
   const score2 = Math.round(results2.reduce((s, r) => s + scoreResult(r), 0) / Math.max(results2.length, 1))
 
+  await useCredits(session.user.id, HEAD_TO_HEAD_COST, 'head_to_head', `${brand1} vs ${brand2}`)
   return NextResponse.json({ brand1, brand2, query, comparison, score1, score2 })
 }
 

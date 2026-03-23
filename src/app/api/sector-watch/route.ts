@@ -54,15 +54,10 @@ export async function POST(req: Request) {
   const { sector, brandName, competitors } = parsed.data
   const cost = CREDIT_COSTS.sector_watch
 
-  const ok = await useCredits(
-    session.user.id,
-    cost,
-    'sector_watch',
-    `Veille secteur: ${sector}`
-  )
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < cost) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   try {
@@ -85,6 +80,7 @@ export async function POST(req: Request) {
       }
     }
 
+    await useCredits(session.user.id, cost, 'sector_watch', `Veille secteur: ${sector}`)
     return NextResponse.json({ sector, analysis, creditsUsed: cost })
   } catch (err) {
     console.error('[sector-watch] POST error:', err)

@@ -61,10 +61,10 @@ export async function POST(req: Request) {
   let url = body.url.trim()
   if (!url.startsWith('http')) url = 'https://' + url
 
-  const ok = await useCredits(session.user.id, 1, 'site_performance', url)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 1) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   try {

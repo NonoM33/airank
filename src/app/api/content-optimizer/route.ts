@@ -25,10 +25,10 @@ export async function POST(req: Request) {
 
   const { text, brandName, context } = parsed.data
 
-  const ok = await useCredits(session.user.id, 3, 'content_optimizer', brandName)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 3) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const prompt = `Tu es un expert en optimisation de contenu pour la visibilité dans les LLMs (ChatGPT, Claude, Gemini, Perplexity).
@@ -60,6 +60,7 @@ Réponds UNIQUEMENT en JSON valide:
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
+    await useCredits(session.user.id, 3, 'content_optimizer', '')
     return NextResponse.json(result)
   } catch {
     return NextResponse.json({ error: 'Optimisation impossible. Réessayez.' }, { status: 500 })

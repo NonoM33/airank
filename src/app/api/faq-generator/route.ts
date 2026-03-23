@@ -26,10 +26,10 @@ export async function POST(req: Request) {
 
   const { brandName, industry, count, focus } = parsed.data
 
-  const ok = await useCredits(session.user.id, 2, 'faq_generator', `${brandName} - ${industry}`)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 2) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const prompt = `Tu es un expert SEO spécialisé dans l'optimisation pour les LLMs.

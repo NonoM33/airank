@@ -55,10 +55,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
   }
 
-  const ok = await useCredits(session.user.id, CREDIT_COSTS.scan, 'scan', `Scan ${brand.name}`)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < CREDIT_COSTS.scan) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const results = await scanBrand(brand.name, query)
@@ -92,5 +92,6 @@ export async function POST(req: Request) {
     include: { results: true },
   })
 
+  await useCredits(session.user.id, CREDIT_COSTS.scan, 'scan', `Scan ${brand.name}`)
   return NextResponse.json({ scan })
 }

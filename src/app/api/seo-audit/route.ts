@@ -28,10 +28,10 @@ export async function POST(req: Request) {
 
   const { url, brandName } = parsed.data
 
-  const ok = await useCredits(session.user.id, 2, 'seo_audit', url)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 2) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   // Fetch the page HTML
@@ -84,6 +84,8 @@ Effectue une analyse complète et réponds UNIQUEMENT en JSON valide avec cette 
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
+    // Debit credits only after successful analysis
+    await useCredits(session.user.id, 2, 'seo_audit', url)
     return NextResponse.json({ url, ...result })
   } catch {
     return NextResponse.json({ error: 'Analyse impossible. Réessayez.' }, { status: 500 })

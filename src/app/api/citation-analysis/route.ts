@@ -24,10 +24,10 @@ export async function POST(req: Request) {
 
   const { brandName, text } = parsed.data
 
-  const ok = await useCredits(session.user.id, 1, 'citation_analysis', brandName)
-  if (!ok) {
-    const credits = await getCredits(session.user.id)
-    return NextResponse.json({ error: 'Crédits insuffisants', credits }, { status: 402 })
+  // Check credits first but don't debit yet
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < 1) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
   const prompt = `Tu es un expert en analyse de réputation et de visibilité dans les LLMs.
