@@ -10,6 +10,7 @@ const schema = z.object({
   industry: z.string().min(1).max(200),
   count: z.number().int().min(3).max(15).default(8),
   focus: z.string().max(200).optional(),
+  url: z.string().max(500).optional(),
 })
 
 export async function POST(req: Request) {
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Données invalides' }, { status: 400 })
   }
 
-  const { brandName, industry, count, focus } = parsed.data
+  const { brandName, industry, count, focus, url } = parsed.data
 
   // Check credits first but don't debit yet
   const currentCredits = await getCredits(session.user.id)
@@ -32,9 +33,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
+  // If URL provided, fetch site content for context
+  let siteContext = ''
+  if (url) {
+    try {
+      const targetUrl = url.match(/^https?:\/\//) ? url : `https://${url}`
+      const siteRes = await fetch(targetUrl, {
+        headers: { 'User-Agent': 'AIRank-FAQ-Generator/1.0' },
+        signal: AbortSignal.timeout(10000),
+      })
+      const html = await siteRes.text()
+      siteContext = html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 6000)
+    } catch {
+      // Site unreachable, continue without context
+    }
+  }
+
+  const siteSection = siteContext
+    ? `\n\nVoici le contenu du site web de "${brandName}" (${url}) pour baser tes questions sur des informations RÉELLES :\n---\n${siteContext}\n---\n\nGénère les questions en te basant sur ce contenu réel : services proposés, tarifs mentionnés, fonctionnalités, témoignages, cas d'usage, etc. Les réponses doivent refléter les VRAIS services/produits du site.`
+    : ''
+
   const prompt = `Tu es un expert SEO spécialisé dans l'optimisation pour les LLMs.
 
-Génère ${count} questions-réponses FAQ en français pour "${brandName}" dans le secteur "${industry}"${focus ? `, avec un focus sur "${focus}"` : ''}.
+Génère ${count} questions-réponses FAQ en français pour "${brandName}" dans le secteur "${industry}"${focus ? `, avec un focus sur "${focus}"` : ''}.${siteSection}
 
 Objectif : Ces FAQs doivent être citées par ChatGPT, Claude, Gemini et Perplexity quand des utilisateurs posent des questions sur ce secteur.
 
@@ -43,6 +73,7 @@ Règles:
 - Réponses factuelles, précises, de 2-4 phrases
 - Intégrer naturellement "${brandName}" dans les réponses
 - Couvrir : définitions, comparaisons, prix, utilisation, avantages, cas d'usage
+${siteContext ? '- Baser les réponses sur le contenu RÉEL du site\n- Mentionner les vrais services, tarifs et avantages trouvés sur le site' : ''}
 - Vocabulaire conversationnel et professionnel
 
 Réponds UNIQUEMENT en JSON valide:

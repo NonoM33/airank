@@ -33,6 +33,7 @@ model User {
   referralReceived     Referral?        @relation("ReferralReceived")
   scoreObjectives      ScoreObjective[]
   webhookConfigs       WebhookConfig[]
+  analyses             AnalysisResult[]
   createdAt            DateTime         @default(now())
 }
 
@@ -267,6 +268,22 @@ model ActionItem {
   actionType         String?    // "schema_org" | "faq" | "meta_description" | "og_tags" | "canonical" | "structured_data" | "content" | "generic"
   verificationStatus String?    // "implemented" | "partial" | "not_implemented"
   verifiedAt         DateTime?
+}
+
+model AnalysisResult {
+  id        String   @id @default(cuid())
+  userId    String
+  brandId   String?
+  type      String   // seo_audit, benchmark, authority_score, sentiment_deep, coverage_matrix, citation_analysis, content_optimizer, faq_generator, head_to_head, competitor_analysis, sector_watch, site_performance
+  input     Json     // paramètres d'entrée (url, brandId, etc.)
+  result    Json     // résultat complet
+  credits   Int      // crédits dépensés
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, brandId, type])
 }
 
 enum Plan {

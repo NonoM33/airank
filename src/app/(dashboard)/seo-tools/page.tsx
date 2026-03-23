@@ -332,6 +332,7 @@ function FaqGeneratorTool() {
   const [brandName, setBrandName] = useState('')
   const [industry, setIndustry] = useState('')
   const [focus, setFocus] = useState('')
+  const [siteUrl, setSiteUrl] = useState('')
   const [count, setCount] = useState(8)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -345,7 +346,7 @@ function FaqGeneratorTool() {
       const res = await fetch('/api/faq-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandName, industry, focus: focus || undefined, count }),
+        body: JSON.stringify({ brandName, industry, focus: focus || undefined, count, url: siteUrl || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
@@ -365,6 +366,9 @@ function FaqGeneratorTool() {
 
   return (
     <div className="space-y-4">
+      <div className="space-y-3">
+        <Input placeholder="URL du site (optionnel — pour des FAQs basées sur le contenu réel)" value={siteUrl} onChange={e => setSiteUrl(e.target.value)} className="text-sm" />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Input placeholder="Nom de marque *" value={brandName} onChange={e => setBrandName(e.target.value)} />
         <Input placeholder="Secteur d'activité *" value={industry} onChange={e => setIndustry(e.target.value)} />
