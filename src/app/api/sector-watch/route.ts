@@ -98,7 +98,8 @@ export async function POST(req: Request) {
         userId: session.user.id,
         type: 'sector_watch',
         input: inputKey,
-        result: resultData,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        result: JSON.parse(JSON.stringify(resultData)) as any,
         credits: COST,
       },
     })

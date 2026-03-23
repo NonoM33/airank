@@ -164,6 +164,5 @@ export async function PATCH(req: Request) {
     where: { id: itemId },
     data: { done },
   })
-  await useCredits(session.user.id, ACTION_PLAN_COST, 'action_plan', `Plan 30j pour ${brand.name}`)
   return NextResponse.json(updated)
 }

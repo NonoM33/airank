@@ -75,9 +75,9 @@ export async function POST(req: Request) {
   })
 
   const matrix = uniqueScans.slice(0, 10).map(scan => {
-    const row: Record<string, unknown> = {
+    const row: Record<string, string | null | { mentioned: boolean; position: number | null }> = {
       query: scan.query.slice(0, 70),
-      scanDate: scan.createdAt,
+      scanDate: scan.createdAt.toISOString(),
     }
     for (const { key } of LLMS) {
       const result = scan.results.find(r => r.llm === key)

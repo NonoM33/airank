@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { notifyCreditsChanged } from '@/lib/credits-event'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ import {
   Monitor,
   Zap,
   Info,
+  Clock,
+  History,
 } from 'lucide-react'
 import { ActionableRecommendation } from '@/components/ui/actionable-recommendation'
 
@@ -84,7 +86,8 @@ function SeoAuditTool() {
       })
       const data = await res.json()
       if (!res.ok) { setError(res.status === 402 ? "__CREDIT__" : (data.error || "Erreur")); return }
-      setResult(data); notifyCreditsChanged()
+      setResult(data)
+      if (!data.cached) notifyCreditsChanged()
     } catch {
       setError('Erreur réseau')
     } finally {
@@ -132,6 +135,12 @@ function SeoAuditTool() {
 
       {result && (
         <div className="space-y-4">
+          {result.cached && (
+            <div className="flex items-center gap-2 text-xs text-violet-400 bg-violet-500/10 rounded-lg px-3 py-2 border border-violet-500/20">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              Résultat en cache — analysé le {new Date(result.cachedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Aucun crédit débité.
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-4">
             <Card className="p-5 space-y-2">
               <p className="text-sm text-muted-foreground">Score global</p>
@@ -792,6 +801,107 @@ function PerformanceTool() {
   )
 }
 
+// ── Analysis History ──────────────────────────────────────────────────────────
+
+const TYPE_LABELS: Record<string, string> = {
+  seo_audit: 'Audit SEO',
+  benchmark: 'Benchmark',
+  authority_score: 'Score Autorité',
+  sentiment_deep: 'Analyse Sentiment',
+  coverage_matrix: 'Matrice LLM',
+  citation_analysis: 'Analyse Citations',
+  content_optimizer: 'Optimiseur Contenu',
+  faq_generator: 'FAQ Generator',
+  head_to_head: 'Head-to-Head',
+  competitor_analysis: 'Analyse Concurrents',
+  sector_watch: 'Veille Secteur',
+  site_performance: 'Performance Web',
+}
+
+function formatInput(type: string, input: any): string {
+  if (!input) return ''
+  switch (type) {
+    case 'seo_audit': return input.url ?? ''
+    case 'site_performance': return input.url ?? ''
+    case 'citation_analysis': return `${input.brandName} — ${String(input.text ?? '').slice(0, 50)}…`
+    case 'content_optimizer': return `${input.brandName} — ${String(input.text ?? '').slice(0, 50)}…`
+    case 'faq_generator': return `${input.brandName} · ${input.industry}`
+    case 'head_to_head': return `${input.brand1} vs ${input.brand2}`
+    case 'competitor_analysis': return `${input.competitorName} vs ${input.brandName}`
+    case 'sector_watch': return input.sector ?? ''
+    default: return input.brandName ?? input.brandId?.slice(0, 8) ?? ''
+  }
+}
+
+interface HistoryItem {
+  id: string
+  type: string
+  brandId: string | null
+  input: any
+  credits: number
+  createdAt: string
+}
+
+function AnalysisHistorySection() {
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/analysis-history?limit=30')
+      .then(r => r.json())
+      .then(d => { setHistory(d.analyses ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading || history.length === 0) return null
+
+  return (
+    <Card className="p-5 space-y-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full"
+      >
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm">Analyses récentes</span>
+          <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">{history.length}</Badge>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="space-y-2 pt-1">
+          {history.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <Badge className="bg-violet-500/10 text-violet-400 border-violet-500/20 text-[10px] shrink-0">
+                  {TYPE_LABELS[item.type] ?? item.type}
+                </Badge>
+                <span className="text-sm text-muted-foreground truncate">
+                  {formatInput(item.type, item.input)}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {new Date(item.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <Badge className="bg-secondary text-muted-foreground border-border text-[10px]">
+                  {item.credits} cr.
+                </Badge>
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground pt-1">
+            Relancez la même analyse depuis l&apos;outil correspondant — le résultat sera rechargé gratuitement depuis le cache (24h).
+          </p>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -875,6 +985,8 @@ export default function SeoToolsPage() {
           </TabsContent>
         ))}
       </Tabs>
+
+      <AnalysisHistorySection />
     </div>
   )
 }
