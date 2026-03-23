@@ -3,11 +3,13 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { useCredits, getCredits, getCredits } from '@/lib/credits'
+import { useCredits, getCredits } from '@/lib/credits'
 import { prisma } from '@/lib/db'
 import { queryOpenRouter } from '@/lib/scanner/openrouter'
 
 const schema = z.object({ brandId: z.string() })
+
+const COST = 3
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -17,8 +19,30 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Données invalides' }, { status: 400 })
 
+  const { brandId } = parsed.data
+  const inputKey = { brandId }
+
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'benchmark',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
+  const currentCredits = await getCredits(session.user.id)
+  if (currentCredits < COST) {
+    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
+  }
+
   const brand = await prisma.brand.findFirst({
-    where: { id: parsed.data.brandId, userId: session.user.id },
+    where: { id: brandId, userId: session.user.id },
     include: {
       scans: {
         take: 20,
@@ -29,11 +53,20 @@ export async function POST(req: Request) {
   })
   if (!brand) return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
 
-  // Check credits first but don't debit yet
-  const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < 3) {
-    return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
-  } as const
+  const sentimentMap = { POSITIVE: 80, NEUTRAL: 60, NEGATIVE: 20 } as const
+
+  const allResults = brand.scans.flatMap(s => s.results)
+  const mentioned = allResults.filter(r => r.mentioned)
+
+  const frequency = allResults.length > 0
+    ? Math.round((mentioned.length / allResults.length) * 100)
+    : 0
+
+  const posScores = mentioned.filter(r => r.position).map(r => Math.max(0, 100 - ((r.position! - 1) * 20)))
+  const position = posScores.length > 0
+    ? Math.round(posScores.reduce((a, b) => a + b, 0) / posScores.length)
+    : 0
+
   const sentWithSentiment = allResults.filter(r => r.mentioned && r.sentiment)
   const sentiment = sentWithSentiment.length > 0
     ? Math.round(sentWithSentiment.reduce((sum, r) => sum + (sentimentMap[r.sentiment as keyof typeof sentimentMap] ?? 60), 0) / sentWithSentiment.length)
@@ -83,8 +116,8 @@ Réponds UNIQUEMENT avec ce JSON sans markdown: {"frequency":XX,"position":XX,"s
     }
   } catch { /* use defaults */ }
 
-  await useCredits(session.user.id, 3, 'benchmark', '')
-  return NextResponse.json({
+  await useCredits(session.user.id, COST, 'benchmark', '')
+  const resultData = {
     brandName: brand.name,
     sector,
     scanCount: brand.scans.length,
@@ -96,5 +129,16 @@ Réponds UNIQUEMENT avec ce JSON sans markdown: {"frequency":XX,"position":XX,"s
       { axis: 'Constance', brand: constance, secteur: sectorAvg.constance },
       { axis: 'Autorité', brand: authority, secteur: sectorAvg.authority },
     ],
+  }
+  await prisma.analysisResult.create({
+    data: {
+      userId: session.user.id,
+      brandId,
+      type: 'benchmark',
+      input: inputKey,
+      result: resultData,
+      credits: COST,
+    },
   })
+  return NextResponse.json(resultData)
 }

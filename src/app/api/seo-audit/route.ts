@@ -4,6 +4,7 @@ import { queryOpenRouter } from '@/lib/scanner/openrouter'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { useCredits, getCredits } from '@/lib/credits'
+import { prisma } from '@/lib/db'
 
 const schema = z.object({
   url: z.string().url(),
@@ -17,7 +18,6 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null)
-  // Auto-add https:// if missing
   if (body?.url && typeof body.url === 'string' && !body.url.match(/^https?:\/\//)) {
     body.url = 'https://' + body.url
   }
@@ -27,14 +27,28 @@ export async function POST(req: Request) {
   }
 
   const { url, brandName } = parsed.data
+  const COST = 2
+  const inputKey = { url, brandName: brandName ?? null }
 
-  // Check credits first but don't debit yet
+  // Check cache first (< 24h)
+  const cached = await prisma.analysisResult.findFirst({
+    where: {
+      userId: session.user.id,
+      type: 'seo_audit',
+      input: { equals: inputKey },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (cached) {
+    return NextResponse.json({ ...(cached.result as object), cached: true, cachedAt: cached.createdAt })
+  }
+
   const currentCredits = await getCredits(session.user.id)
-  if (currentCredits < 2) {
+  if (currentCredits < COST) {
     return NextResponse.json({ error: 'Crédits insuffisants', credits: currentCredits }, { status: 402 })
   }
 
-  // Fetch the page HTML
   let html = ''
   try {
     const res = await fetch(url, {
@@ -43,10 +57,9 @@ export async function POST(req: Request) {
     })
     html = await res.text()
   } catch {
-    return NextResponse.json({ error: `Impossible de récupérer la page "${parsed.data.url}". Le site ne répond pas ou l'URL est incorrecte. Essayez avec www (ex: www.exemple.fr).` }, { status: 422 })
+    return NextResponse.json({ error: `Impossible de récupérer la page "${url}". Le site ne répond pas ou l'URL est incorrecte. Essayez avec www (ex: www.exemple.fr).` }, { status: 422 })
   }
 
-  // Truncate HTML for the prompt (keep structure, remove scripts/styles)
   const cleanHtml = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -96,9 +109,18 @@ Effectue une analyse complète et réponds UNIQUEMENT en JSON valide avec cette 
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON')
     const result = JSON.parse(jsonMatch[0])
-    // Debit credits only after successful analysis
-    await useCredits(session.user.id, 2, 'seo_audit', url)
-    return NextResponse.json({ url, ...result })
+    await useCredits(session.user.id, COST, 'seo_audit', url)
+    const resultData = { url, ...result }
+    await prisma.analysisResult.create({
+      data: {
+        userId: session.user.id,
+        type: 'seo_audit',
+        input: inputKey,
+        result: resultData,
+        credits: COST,
+      },
+    })
+    return NextResponse.json(resultData)
   } catch {
     return NextResponse.json({ error: 'Analyse impossible. Réessayez.' }, { status: 500 })
   }

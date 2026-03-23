@@ -33,6 +33,13 @@
 - ❌ Analysis results not saved → ALWAYS persist to AnalysisResult table
 - ❌ Credits charged on re-view → cache results, return cached for free
 
+### Brand Selector (MANDATORY ON EVERY PAGE WITH DATA)
+- **EVERY page** that shows brand-specific data MUST have a brand selector if user has 2+ brands
+- Pattern: pill-style buttons or dropdown (see heatmap/HeatmapClient.tsx)
+- Default: first brand, but user can switch
+- **GLOBAL VERIFICATION**: search for `brands[0]` in ALL files — if found without a selector, it's a bug
+- Pages to verify: Dashboard, Scans, Heatmap, Compare, Analytics, Growth, Veille, SEO Tools, Reports
+
 ## UX Principles (MANDATORY)
 1. **Apple-level polish** — Every screen must be beautiful, clear, and intuitive. No confusion ever.
 2. **Brand context everywhere** — Always show which brand data belongs to. Add brand selectors on ALL pages with data.
