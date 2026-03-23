@@ -4,27 +4,29 @@ import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import { ScansHeatmap, type HeatmapScan } from '@/components/dashboard/ScansHeatmap'
 import { BarChart2 } from 'lucide-react'
+import { HeatmapBrandSelector } from './HeatmapClient'
 
-export default async function HeatmapPage() {
+export default async function HeatmapPage({ searchParams }: { searchParams: Promise<{ brand?: string }> }) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
   const plan = (session.user as { plan?: string }).plan ?? 'FREE'
+  const params = await searchParams
 
-  // Get user's first brand (or all scans across brands)
   const brands = await prisma.brand.findMany({
     where: { userId: session.user.id },
     select: { id: true, name: true },
-    take: 10,
+    take: 50,
   })
 
-  const brandId = brands[0]?.id
+  const selectedBrandId = params.brand || brands[0]?.id
+  const selectedBrand = brands.find(b => b.id === selectedBrandId) || brands[0]
 
   let scans: HeatmapScan[] = []
 
-  if (brandId) {
+  if (selectedBrand) {
     const rawScans = await prisma.scan.findMany({
-      where: { brandId },
+      where: { brandId: selectedBrand.id },
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: { results: true },
@@ -61,12 +63,11 @@ export default async function HeatmapPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card p-6">
-          {brands.length > 1 && (
-            <p className="text-xs text-muted-foreground mb-4">
-              Marque affichée : <span className="text-foreground font-medium">{brands[0].name}</span>
-            </p>
-          )}
-          <ScansHeatmap brandId={brandId ?? ''} scans={scans} plan={plan} />
+          <HeatmapBrandSelector
+            brands={brands.map(b => ({ id: b.id, name: b.name }))}
+            selectedId={selectedBrand?.id ?? ''}
+          />
+          <ScansHeatmap brandId={selectedBrand?.id ?? ''} scans={scans} plan={plan} />
         </div>
       )}
     </div>
