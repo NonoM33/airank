@@ -369,7 +369,7 @@ export default function VeillePage() {
                       borderRadius: '8px',
                       fontSize: '12px',
                     }}
-                    labelFormatter={(v: string) => new Date(v).toLocaleDateString('fr-FR')}
+                    labelFormatter={(v) => new Date(String(v)).toLocaleDateString('fr-FR')}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }}
