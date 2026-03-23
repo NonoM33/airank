@@ -7,6 +7,7 @@ export const CREDIT_COSTS = {
   content_faq: 20,
   content_press: 20,
   auto_scan: 10,
+  sector_watch: 2,
 } as const
 
 export const PLAN_CREDITS = {
