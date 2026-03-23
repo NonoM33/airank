@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, Lock, Sparkles } from 'lucide-react'
+import { CreditCTA } from '@/components/ui/credit-cta'
+import { ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Minus, Lock, Sparkles, Gauge, Loader2, AlertCircle } from 'lucide-react'
 import { DashboardScanButton } from '@/components/dashboard/DashboardScanButton'
 import { CompetitorRow } from '@/components/dashboard/CompetitorRow'
 import { generateRecommendations } from '@/lib/recommendations'
@@ -154,6 +155,9 @@ export default function BrandDetailPage() {
   const id = params.id as string
   const { data: session } = useSession()
   const [data, setData] = useState<BrandDetailData | null | undefined>(undefined)
+  const [perf, setPerf] = useState<any>(null)
+  const [perfLoading, setPerfLoading] = useState(false)
+  const [perfError, setPerfError] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -250,6 +254,25 @@ export default function BrandDetailPage() {
   const cetteSmaine = recommendations.filter((r) => r.category === 'cette-semaine')
   const ceMois = recommendations.filter((r) => r.category === 'ce-mois')
   const mentionedCount = llmScores.filter((s) => s.mentioned).length
+
+  async function analyzePerformance() {
+    if (!brand.domain) return
+    setPerfLoading(true); setPerfError(''); setPerf(null)
+    try {
+      const res = await fetch('/api/site-performance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: brand.domain }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setPerfError(res.status === 402 ? '__CREDIT__' : d.error || 'Erreur'); return }
+      setPerf(d)
+    } catch {
+      setPerfError('Erreur réseau')
+    } finally {
+      setPerfLoading(false)
+    }
+  }
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
@@ -561,6 +584,110 @@ export default function BrandDetailPage() {
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Performance Web ─────────────────────────────────────────────────── */}
+      {brand.domain && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <Gauge className="h-4 w-4 text-primary" />
+                Performance Web
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{brand.domain}</p>
+            </div>
+            {!perf && (
+              <button
+                onClick={analyzePerformance}
+                disabled={perfLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-xs font-medium hover:bg-secondary transition-colors disabled:opacity-50"
+              >
+                {perfLoading
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Gauge className="h-3.5 w-3.5" />}
+                {perfLoading ? 'Analyse…' : 'Analyser (1 crédit)'}
+              </button>
+            )}
+          </div>
+
+          {perfError && (
+            perfError === '__CREDIT__' ? <CreditCTA variant="banner" cost={1} /> : (
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {perfError}
+              </div>
+            )
+          )}
+
+          {perfLoading && (
+            <div className="card-glow rounded-xl border border-border bg-card p-6 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Analyse en cours (20–30 secondes)…
+            </div>
+          )}
+
+          {perf && !perfLoading && (
+            <div className="card-glow rounded-xl border border-border bg-card p-5 space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                {(['mobile', 'desktop'] as const).map(s => {
+                  const sc = perf[s].score as number
+                  const color = sc >= 90 ? '#22C55E' : sc >= 50 ? '#F97316' : '#EF4444'
+                  const textColor = sc >= 90 ? 'text-green-400' : sc >= 50 ? 'text-amber-400' : 'text-red-400'
+                  const lbl = sc >= 90 ? 'Excellent' : sc >= 70 ? 'Bon' : sc >= 50 ? 'Moyen' : 'Lent'
+                  const r = 30, dim = 76, circ = 2 * Math.PI * r
+                  const offset = circ * (1 - sc / 100)
+                  return (
+                    <div key={s} className="flex items-center gap-4">
+                      <div className="relative shrink-0" style={{ width: dim, height: dim }}>
+                        <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} style={{ transform: 'rotate(-90deg)' }}>
+                          <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="#27272A" strokeWidth="8" />
+                          <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke={color} strokeWidth="8"
+                            strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-lg font-bold font-mono" style={{ color }}>{sc}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{s === 'mobile' ? '📱 Mobile' : '🖥️ Desktop'}</p>
+                        <p className={`text-xs font-semibold mt-0.5 ${textColor}`}>{lbl}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Core Web Vitals (Mobile)</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'FCP', v: perf.mobile.fcp, n: perf.mobile.fcpMs, g: 1800, w: 3000 },
+                    { label: 'LCP', v: perf.mobile.lcp, n: perf.mobile.lcpMs, g: 2500, w: 4000 },
+                    { label: 'CLS', v: perf.mobile.cls, n: perf.mobile.clsValue, g: 0.1, w: 0.25 },
+                    { label: 'TBT', v: perf.mobile.tbt, n: perf.mobile.tbtMs, g: 200, w: 600 },
+                  ].filter(x => x.v).map(({ label, v, n, g, w }) => {
+                    const st = n === null ? 'n' : n <= g ? 'g' : n <= w ? 'w' : 'b'
+                    const cls = st === 'g' ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                      : st === 'w' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : st === 'b' ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : 'bg-secondary text-muted-foreground border-border'
+                    return (
+                      <div key={label} className={`rounded-lg border px-2.5 py-1.5 ${cls}`}>
+                        <p className="text-[10px] font-semibold">{label}</p>
+                        <p className="text-sm font-bold font-mono">{v}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="flex justify-end border-t border-border pt-3">
+                <Link href="/seo-tools" className="text-xs text-primary hover:underline flex items-center gap-1">
+                  Analyse complète dans les outils SEO
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -573,6 +573,197 @@ function CitationAnalysisTool() {
   )
 }
 
+// ── Performance Tool ─────────────────────────────────────────────────────────
+
+function PerfScoreCircle({ score }: { score: number }) {
+  const r = 38
+  const dim = 96
+  const circumference = 2 * Math.PI * r
+  const dashOffset = circumference * (1 - score / 100)
+  const color = score >= 90 ? '#22C55E' : score >= 50 ? '#F97316' : '#EF4444'
+  return (
+    <div className="relative shrink-0" style={{ width: dim, height: dim }}>
+      <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="#27272A" strokeWidth="9" />
+        <circle
+          cx={dim / 2} cy={dim / 2} r={r}
+          fill="none" stroke={color} strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-2xl font-bold font-mono" style={{ color }}>{score}</span>
+      </div>
+    </div>
+  )
+}
+
+function PerfMetricCard({ label, display, numeric, good, warn, desc }: {
+  label: string; display: string | null; numeric: number | null; good: number; warn: number; desc: string
+}) {
+  const status = numeric === null ? 'neutral'
+    : numeric <= good ? 'good'
+    : numeric <= warn ? 'warn'
+    : 'bad'
+  const cls = status === 'good' ? 'border-green-500/20 bg-green-500/5 text-green-400'
+    : status === 'warn' ? 'border-amber-500/20 bg-amber-500/5 text-amber-400'
+    : status === 'bad' ? 'border-red-500/20 bg-red-500/5 text-red-400'
+    : 'border-border bg-secondary/40 text-muted-foreground'
+  return (
+    <div className={`rounded-lg border p-3 ${cls}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-lg font-bold font-mono mt-1">{display ?? '—'}</p>
+      <p className="text-[10px] opacity-60 mt-0.5">{desc}</p>
+    </div>
+  )
+}
+
+function getPerfLabel(score: number) {
+  if (score >= 90) return 'Excellent'
+  if (score >= 70) return 'Bon'
+  if (score >= 50) return 'Moyen'
+  if (score >= 30) return 'Lent'
+  return 'Très lent'
+}
+
+function PerformanceTool() {
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState('')
+  const [view, setView] = useState<'mobile' | 'desktop'>('mobile')
+
+  async function run() {
+    setLoading(true); setError(''); setResult(null)
+    try {
+      const res = await fetch('/api/site-performance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(res.status === 402 ? '__CREDIT__' : data.error || 'Erreur'); return }
+      setResult(data)
+    } catch {
+      setError('Erreur réseau')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const m = result?.[view]
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
+        <Input
+          placeholder="example.com ou https://example.com/page"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && run()}
+        />
+        <Button onClick={run} disabled={loading || !url}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gauge className="h-4 w-4" />}
+          <span className="ml-1.5">Analyser</span>
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">Coût : 1 crédit · Analyse mobile + desktop via Google PageSpeed</p>
+
+      {error && (
+        error === '__CREDIT__' ? <CreditCTA variant="banner" cost={1} /> : (
+          <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Analyse en cours (peut prendre 20–30 secondes)…
+        </div>
+      )}
+
+      {result && !loading && (
+        <div className="space-y-4">
+          {/* Score overview — both views as clickable cards */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            {(['mobile', 'desktop'] as const).map(s => {
+              const sc = result[s].score
+              const active = view === s
+              return (
+                <button
+                  key={s}
+                  onClick={() => setView(s)}
+                  className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+                    active ? 'border-primary/50 bg-primary/5' : 'border-border bg-card hover:border-primary/30'
+                  }`}
+                >
+                  <PerfScoreCircle score={sc} />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {s === 'mobile'
+                        ? <Smartphone className="h-3.5 w-3.5 text-muted-foreground" />
+                        : <Monitor className="h-3.5 w-3.5 text-muted-foreground" />}
+                      <span className="text-sm font-medium">{s === 'mobile' ? 'Mobile' : 'Desktop'}</span>
+                      {active && (
+                        <Badge className="ml-1 bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5">
+                          Sélectionné
+                        </Badge>
+                      )}
+                    </div>
+                    <p className={`text-sm font-semibold ${sc >= 90 ? 'text-green-400' : sc >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {getPerfLabel(sc)}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Core Web Vitals for selected view */}
+          {m && (
+            <Card className="p-5 space-y-3">
+              <h3 className="text-sm font-semibold">
+                Core Web Vitals — {view === 'mobile' ? '📱 Mobile' : '🖥️ Desktop'}
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <PerfMetricCard label="FCP" display={m.fcp} numeric={m.fcpMs} good={1800} warn={3000} desc="First Contentful Paint" />
+                <PerfMetricCard label="LCP" display={m.lcp} numeric={m.lcpMs} good={2500} warn={4000} desc="Largest Contentful Paint" />
+                <PerfMetricCard label="CLS" display={m.cls} numeric={m.clsValue} good={0.1} warn={0.25} desc="Cumulative Layout Shift" />
+                <PerfMetricCard label="TBT" display={m.tbt} numeric={m.tbtMs} good={200} warn={600} desc="Total Blocking Time" />
+                <PerfMetricCard label="Speed Index" display={m.speedIndex} numeric={m.speedIndexMs} good={3400} warn={5800} desc="Speed Index" />
+              </div>
+            </Card>
+          )}
+
+          {/* Opportunities */}
+          {m?.opportunities?.length > 0 && (
+            <Card className="p-5 space-y-3">
+              <h3 className="text-sm font-semibold">Opportunités d&apos;amélioration</h3>
+              <div className="space-y-2">
+                {m.opportunities.map((opp: any) => (
+                  <div key={opp.id} className="flex items-start gap-3 rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-2.5">
+                    <Zap className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{opp.title}</p>
+                      {opp.displayValue && (
+                        <p className="text-xs text-amber-400 mt-0.5">{opp.displayValue}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -607,6 +798,14 @@ const TOOLS = [
     description: 'Analysez comment un LLM cite votre marque (sentiment, contexte, position)',
     credits: 1,
     component: CitationAnalysisTool,
+  },
+  {
+    id: 'performance',
+    label: 'Performance Web',
+    icon: Gauge,
+    description: 'Analysez les Core Web Vitals de votre site (mobile + desktop) via Google PageSpeed',
+    credits: 1,
+    component: PerformanceTool,
   },
 ]
 
