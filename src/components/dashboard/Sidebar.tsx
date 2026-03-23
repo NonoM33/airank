@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
@@ -39,6 +39,13 @@ const navItems = [
 ]
 
 const PRO_PLANS = ['PRO', 'AGENCY']
+
+const PLAN_CREDITS_MAP: Record<string, number> = {
+  FREE: 20,
+  STARTER: 500,
+  PRO: 2000,
+  AGENCY: 10000,
+}
 
 const PLAN_BADGE: Record<string, string> = {
   FREE: 'bg-zinc-800 text-zinc-400',

@@ -6,6 +6,14 @@ export const stripe = process.env.STRIPE_SECRET_KEY
     })
   : (null as unknown as Stripe)
 
+export const CREDIT_PACKS = {
+  PACK_50: { credits: 50, price: 9, label: '50 crédits' },
+  PACK_200: { credits: 200, price: 29, label: '200 crédits' },
+  PACK_500: { credits: 500, price: 59, label: '500 crédits' },
+} as const
+
+export type CreditPackId = keyof typeof CREDIT_PACKS
+
 export const PLANS = {
   STARTER: {
     name: 'Starter',

@@ -99,6 +99,8 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans, cre
   const [activePlan, setActivePlan] = useState(currentPlan)
   const searchParams = useSearchParams()
 
+  const [rechargedCredits, setRechargedCredits] = useState<number | null>(null)
+
   useEffect(() => {
     if (searchParams.get('success') === 'true' && activePlan === 'FREE') {
       setSyncing(true)
@@ -109,6 +111,12 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans, cre
           setSyncing(false)
         })
         .catch(() => setSyncing(false))
+    }
+    const recharged = searchParams.get('recharged')
+    if (recharged) {
+      setRechargedCredits(parseInt(recharged, 10))
+      // Clear URL param
+      window.history.replaceState({}, '', '/billing')
     }
   }, [searchParams, activePlan])
 
@@ -145,6 +153,19 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans, cre
 
   return (
     <div className="space-y-6">
+
+      {rechargedCredits && (
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 flex items-center gap-3">
+          <Zap className="h-5 w-5 text-green-400" />
+          <div>
+            <p className="text-sm font-medium text-green-400">Recharge réussie !</p>
+            <p className="text-xs text-muted-foreground">+{rechargedCredits} crédits ajoutés à votre compte</p>
+          </div>
+          <button onClick={() => setRechargedCredits(null)} className="ml-auto text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* ── Row 1: Current plan (left) | Usage (right) ─────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -201,6 +222,48 @@ export function BillingClient({ currentPlan, stripeId, limits, usage, plans, cre
               <p className="text-xs text-muted-foreground mt-1">Jours historique</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── Recharge crédits ─────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h3 className="font-semibold mb-1 flex items-center gap-2"><Coins className="h-4 w-4 text-primary" /> Recharger des crédits</h3>
+        <p className="text-xs text-muted-foreground mb-4">Achat unique, crédits ajoutés instantanément à votre compte</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {([
+            { pack: 'PACK_50', credits: 50, price: 9, perCredit: '0.18' },
+            { pack: 'PACK_200', credits: 200, price: 29, perCredit: '0.15', popular: true },
+            { pack: 'PACK_500', credits: 500, price: 59, perCredit: '0.12', best: true },
+          ] as const).map(p => (
+            <button
+              key={p.pack}
+              onClick={async () => {
+                setLoading(true)
+                try {
+                  const res = await fetch('/api/stripe/recharge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pack: p.pack }),
+                  })
+                  const data = await res.json()
+                  if (data.url) window.location.href = data.url
+                  else setError(data.error || 'Erreur')
+                } catch { setError('Erreur réseau') }
+                finally { setLoading(false) }
+              }}
+              disabled={loading}
+              className={`relative rounded-xl border p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/5 ${
+                p.popular ? 'border-primary bg-primary/5' : 'border-border'
+              }`}
+            >
+              {p.popular && <Badge className="absolute -top-2 right-3 text-[10px]">Populaire</Badge>}
+              {p.best && <Badge variant="secondary" className="absolute -top-2 right-3 text-[10px]">Meilleur prix</Badge>}
+              <div className="text-2xl font-bold">{p.credits}</div>
+              <div className="text-xs text-muted-foreground">crédits</div>
+              <div className="mt-2 text-lg font-semibold">{p.price}€</div>
+              <div className="text-[10px] text-muted-foreground">{p.perCredit}€/crédit</div>
+            </button>
+          ))}
         </div>
       </div>
 

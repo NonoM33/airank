@@ -24,13 +24,39 @@ async function updateUserPlan(customerId: string, plan: 'FREE' | 'STARTER' | 'PR
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id ?? session.metadata?.userId
-  const plan = (session.metadata?.plan as 'STARTER' | 'PRO' | 'AGENCY') ?? 'PRO'
   const customerId = typeof session.customer === 'string' ? session.customer : null
 
   if (!userId) {
     console.error('[Webhook] checkout.session.completed: no userId found')
     return
   }
+
+  // Credit recharge (one-time payment)
+  if (session.metadata?.type === 'credit_recharge') {
+    const credits = parseInt(session.metadata.credits ?? '0', 10)
+    if (credits > 0) {
+      console.log(`[Webhook] Credit recharge: userId=${userId}, credits=${credits}`)
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          credits: { increment: credits },
+          ...(customerId ? { stripeId: customerId } : {}),
+        },
+      })
+      await prisma.creditUsage.create({
+        data: {
+          userId,
+          credits: -credits, // negative = credits added
+          action: 'recharge',
+          detail: `Recharge ${session.metadata.pack}: +${credits} crédits`,
+        },
+      })
+    }
+    return
+  }
+
+  // Subscription checkout
+  const plan = (session.metadata?.plan as 'STARTER' | 'PRO' | 'AGENCY') ?? 'PRO'
 
   console.log(`[Webhook] checkout.session.completed: userId=${userId}, plan=${plan}, customer=${customerId}`)
 
