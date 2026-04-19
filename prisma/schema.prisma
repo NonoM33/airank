@@ -10,18 +10,23 @@ datasource db {
 }
 
 model User {
-  id                   String           @id @default(cuid())
-  email                String           @unique
+  id                   String              @id @default(cuid())
+  email                String              @unique
   name                 String?
   image                String?
   password             String?
-  plan                 Plan             @default(FREE)
-  credits              Int              @default(20)
-  stripeId             String?          @unique
+  plan                 Plan                @default(FREE)
+  billingCycle         BillingCycle        @default(MONTHLY)
+  credits              Int                 @default(20)
+  stripeId             String?             @unique
   sector               String?
-  referralCode         String?          @unique
-  onboardingCompleted  Boolean          @default(false)
-  onboardingStep       Int              @default(0)
+  referralCode         String?             @unique
+  onboardingCompleted  Boolean             @default(false)
+  onboardingStep       Int                 @default(0)
+  trialEndsAt          DateTime?
+  isLifetime           Boolean             @default(false)
+  lifetimeTier         String?             // e.g. "tier1", "tier2", "tier3" (AppSumo stacking)
+  language             String              @default("fr")
   brands               Brand[]
   accounts             Account[]
   sessions             Session[]
@@ -29,12 +34,21 @@ model User {
   scheduledScans       ScheduledScan[]
   scoreAlerts          ScoreAlert[]
   alerts               Alert[]
-  referralsSent        Referral[]       @relation("ReferralsSent")
-  referralReceived     Referral?        @relation("ReferralReceived")
+  referralsSent        Referral[]          @relation("ReferralsSent")
+  referralReceived     Referral?           @relation("ReferralReceived")
   scoreObjectives      ScoreObjective[]
   webhookConfigs       WebhookConfig[]
   analyses             AnalysisResult[]
-  createdAt            DateTime         @default(now())
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference?
+  apiKeys              ApiKey[]
+  apiUsage             ApiUsage[]
+  whiteLabelConfig     WhiteLabelConfig?
+  ownedTeams           Team[]              @relation("TeamOwner")
+  teamMemberships      TeamMember[]
+  sentInvites          TeamInvite[]        @relation("InviteSender")
+  activityLogs         ActivityLog[]
+  createdAt            DateTime            @default(now())
 }
 
 model Account {
@@ -110,17 +124,37 @@ model Scan {
 }
 
 model ScanResult {
-  id          String    @id @default(cuid())
-  scanId      String
-  scan        Scan      @relation(fields: [scanId], references: [id])
-  llm         LLM
-  mentioned   Boolean
-  position    Int?
-  context     String?
-  sentiment   Sentiment?
-  competitors String    @default("[]") // JSON array of strings
-  rawResponse String
-  score       Int       @default(0)   // per-LLM score (0-100)
+  id             String       @id @default(cuid())
+  scanId         String
+  scan           Scan         @relation(fields: [scanId], references: [id])
+  llm            LLM
+  mentioned      Boolean
+  position       Int?
+  context        String?
+  sentiment      Sentiment?
+  sentimentScore Float?       // -1.0 (very negative) to +1.0 (very positive) — nuanced
+  sentimentTone  String?      // "authoritative" | "casual" | "critical" | "enthusiastic" | "neutral"
+  competitors    String       @default("[]") // JSON array of strings
+  rawResponse    String
+  score          Int          @default(0)   // per-LLM score (0-100)
+  citations      Citation[]
+}
+
+// Citation tracking: a citation is a source URL the LLM referenced when mentioning the brand.
+// Critical for SEO actionable recommendations.
+model Citation {
+  id           String     @id @default(cuid())
+  scanResultId String
+  scanResult   ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+  sourceUrl    String
+  sourceTitle  String?
+  sourceDomain String
+  quote        String?    // The snippet from the source that was used
+  position     Int?       // order of citation in the response
+  createdAt    DateTime   @default(now())
+
+  @@index([sourceDomain])
+  @@index([scanResultId])
 }
 
 model CreditUsage {
@@ -301,7 +335,225 @@ enum LLM {
 }
 
 enum Sentiment {
-  POSITIVE
-  NEUTRAL
+  VERY_NEGATIVE
   NEGATIVE
+  NEUTRAL
+  POSITIVE
+  VERY_POSITIVE
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+  LIFETIME
+}
+
+// In-app notification center (aggregator for all alert types)
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String?          // internal URL to navigate to
+  iconKey   String?          // "bell" | "trending_up" | "alert" | "trophy" ...
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  SCAN_COMPLETED
+  ALERT_TRIGGERED
+  COMPETITOR_APPEARED
+  SCORE_DRIFT
+  OBJECTIVE_REACHED
+  CREDITS_LOW
+  BILLING_ISSUE
+  TEAM_INVITE
+  REFERRAL_REWARD
+  SYSTEM
+}
+
+model NotificationPreference {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled   Boolean  @default(true)
+  slackEnabled   Boolean  @default(false)
+  slackWebhook   String?
+  smsEnabled     Boolean  @default(false)
+  smsNumber      String?
+  digestFrequency String  @default("realtime") // "realtime" | "hourly" | "daily" | "weekly"
+  scoreDropThreshold Int  @default(10) // notify if score drops by X points
+  mutedUntil     DateTime?
+  updatedAt      DateTime @updatedAt
+}
+
+// Public API: API keys with scoped permissions and rate limiting
+model ApiKey {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String     @unique // sha256 hash of the raw key (never store raw)
+  keyPrefix  String     // first 8 chars for display: "ak_live_xxxx"
+  scopes     String     @default("[\"read\"]") // JSON array: ["read","write","admin"]
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  active     Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  usage      ApiUsage[]
+
+  @@index([keyHash])
+  @@index([userId])
+}
+
+// API usage tracking for billing and rate limiting
+model ApiUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId  String?
+  apiKey    ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  endpoint  String
+  method    String
+  status    Int
+  latencyMs Int?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+}
+
+// White-label configuration per user (Agency plan)
+model WhiteLabelConfig {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName     String?
+  logoUrl         String?
+  faviconUrl      String?
+  primaryColor    String?  // hex "#5B47E0"
+  accentColor     String?
+  customDomain    String?  @unique
+  customDomainVerified Boolean @default(false)
+  supportEmail    String?
+  footerText      String?
+  hideAirankBranding Boolean @default(false)
+  customCss       String?
+  updatedAt       DateTime @updatedAt
+}
+
+// Team / Workspace — for agencies and multi-user accounts
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  ownerId     String
+  owner       User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     TeamMember[]
+  invites     TeamInvite[]
+  plan        Plan         @default(STARTER)
+  seatLimit   Int          @default(5)
+  createdAt   DateTime     @default(now())
+}
+
+model TeamMember {
+  id        String     @id @default(cuid())
+  teamId    String
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      TeamRole   @default(VIEWER)
+  createdAt DateTime   @default(now())
+
+  @@unique([teamId, userId])
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+  CLIENT // read-only access to specific brands (white-label use case)
+}
+
+model TeamInvite {
+  id         String   @id @default(cuid())
+  teamId     String
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email      String
+  role       TeamRole @default(VIEWER)
+  token      String   @unique
+  invitedById String
+  invitedBy  User     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([email])
+}
+
+// Activity audit log for compliance and debugging
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // "brand.created" | "scan.run" | "team.invite" | etc.
+  entity    String?  // "brand" | "scan" | "team"
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Webhook delivery log (for retry logic + debugging)
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String   // references WebhookConfig.id
+  event        String
+  payload      Json
+  status       String   // "pending" | "success" | "failed" | "retrying"
+  statusCode   Int?
+  attemptCount Int      @default(0)
+  lastAttemptAt DateTime?
+  nextAttemptAt DateTime?
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([status, nextAttemptAt])
+}
+
+// Sector benchmark snapshots — real competitive intelligence
+model SectorBenchmark {
+  id        String   @id @default(cuid())
+  sector    String
+  brandName String
+  llm       String   // "CHATGPT" | "CLAUDE" | "PERPLEXITY" | "GEMINI" | "global"
+  score     Int
+  mentions  Int      @default(0)
+  snapshot  DateTime @default(now())
+
+  @@index([sector, snapshot])
+  @@index([sector, brandName])
+}
+
+// Saved filter / custom dashboard view
+model DashboardView {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  config    Json     // widgets layout, filters, date ranges
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

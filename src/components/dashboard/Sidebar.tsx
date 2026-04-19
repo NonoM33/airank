@@ -19,6 +19,11 @@ import {
   Wrench,
   Activity,
   TrendingUp,
+  Link2,
+  Users,
+  Palette,
+  Key,
+  Book,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,10 +36,15 @@ const navItems = [
   { href: '/seo-tools', label: 'Outils SEO', icon: Wrench, proOnly: false },
   { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
   { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
+  { href: '/citations', label: 'Citations', icon: Link2, proOnly: false },
   { href: '/analytics', label: 'Analytics', icon: Activity, proOnly: false },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
   { href: '/veille', label: 'Veille', icon: Activity, proOnly: false },
   { href: '/growth', label: 'Croissance', icon: TrendingUp, proOnly: false },
+  { href: '/team', label: 'Équipe', icon: Users, proOnly: false },
+  { href: '/white-label', label: 'White-label', icon: Palette, proOnly: true },
+  { href: '/api-keys', label: 'Clés API', icon: Key, proOnly: true },
+  { href: '/api-docs', label: 'API Docs', icon: Book, proOnly: true },
   { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
 ]
 

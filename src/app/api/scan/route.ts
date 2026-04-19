@@ -7,6 +7,10 @@ import { scanBrand } from '@/lib/scanner'
 import { calculateGlobalScore } from '@/lib/analysis'
 import { useCredits, getCredits, CREDIT_COSTS } from '@/lib/credits'
 import { calculateLLMScore } from '@/lib/analysis'
+import { extractCitations } from '@/lib/citations'
+import { dispatchWebhook } from '@/lib/webhook-dispatcher'
+import { createNotification } from '@/lib/notifications'
+import { analyzeSentiment } from '@/lib/sentiment'
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -77,21 +81,60 @@ export async function POST(req: Request) {
       query,
       globalScore,
       results: {
-        create: results.map((r) => ({
-          llm: r.llm,
-          mentioned: r.mentioned,
-          position: r.position,
-          context: r.context,
-          sentiment: r.sentiment,
-          competitors: JSON.stringify(r.competitors),
-          rawResponse: r.rawResponse,
-          score: calculateLLMScore(r),
-        })),
+        create: results.map((r) => {
+          const nuanced = r.mentioned ? analyzeSentiment(r.context ?? r.rawResponse) : null
+          return {
+            llm: r.llm,
+            mentioned: r.mentioned,
+            position: r.position,
+            context: r.context,
+            sentiment: nuanced?.bucket ?? r.sentiment,
+            sentimentScore: nuanced?.score ?? null,
+            sentimentTone: nuanced?.tone ?? null,
+            competitors: JSON.stringify(r.competitors),
+            rawResponse: r.rawResponse,
+            score: calculateLLMScore(r),
+          }
+        }),
       },
     },
     include: { results: true },
   })
 
+  // Extract & persist citations per scan result
+  for (const res of scan.results) {
+    const cits = extractCitations(res.rawResponse)
+    if (cits.length > 0) {
+      await prisma.citation.createMany({
+        data: cits.map((c) => ({
+          scanResultId: res.id,
+          sourceUrl: c.sourceUrl,
+          sourceDomain: c.sourceDomain,
+          sourceTitle: c.sourceTitle,
+          position: c.position,
+        })),
+      })
+    }
+  }
+
   await useCredits(session.user.id, CREDIT_COSTS.scan, 'scan', `Scan ${brand.name}`)
+
+  // Fire-and-forget: webhook + notification
+  void dispatchWebhook(session.user.id, 'scan.completed', {
+    scanId: scan.id,
+    brandId,
+    brandName: brand.name,
+    query,
+    globalScore,
+    llmCount: scan.results.length,
+  })
+  void createNotification(session.user.id, {
+    type: 'SCAN_COMPLETED',
+    title: `Scan terminé — ${brand.name}`,
+    body: `Score global : ${globalScore}/100 sur "${query}"`,
+    link: `/scans/${scan.id}`,
+    iconKey: 'search',
+  })
+
   return NextResponse.json({ scan })
 }

@@ -42,16 +42,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
-        // Fetch plan on first login
         const dbUser = await prisma.user.findUnique({ where: { id: user.id as string } })
         token.plan = dbUser?.plan ?? 'FREE'
+        token.language = dbUser?.language ?? 'fr'
         token.planFetchedAt = Date.now()
       }
-      // Refresh plan from DB every 5 minutes (not every request)
       if (token.id && (!token.planFetchedAt || Date.now() - (token.planFetchedAt as number) > 5 * 60 * 1000 || trigger === 'update')) {
         try {
           const dbUser = await prisma.user.findUnique({ where: { id: token.id as string } })
           token.plan = dbUser?.plan ?? 'FREE'
+          token.language = dbUser?.language ?? 'fr'
           token.planFetchedAt = Date.now()
         } catch {
           // DB error — keep existing plan, don't logout
@@ -63,6 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token) {
         session.user.id = token.id as string
         session.user.plan = token.plan as string
+        ;(session.user as { language?: string }).language = (token.language as string) ?? 'fr'
       }
       return session
     },
