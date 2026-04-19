@@ -43,12 +43,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma schema, generated client, CLI and config
+# Copy Prisma schema + config
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# Install Prisma CLI + engines + client cleanly here (not from pnpm store: symlinks break outside .pnpm)
+RUN npm install --no-save --omit=dev prisma@7.5.0 @prisma/client@7.5.0 @prisma/engines@7.5.0 \
+  && chown -R nextjs:nodejs /app/node_modules /app/prisma
+
 USER nextjs
 
 EXPOSE 3000
