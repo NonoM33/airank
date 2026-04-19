@@ -43,9 +43,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma schema + config
+# Copy Prisma schema only (prisma.config.ts intentionally omitted — CLI uses --schema flag explicitly)
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Install Prisma CLI + engines in an ISOLATED directory (avoids conflicts with standalone's node_modules)
 RUN mkdir -p /opt/prisma \
