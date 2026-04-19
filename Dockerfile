@@ -47,9 +47,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
-# Install Prisma CLI + engines + client cleanly here (not from pnpm store: symlinks break outside .pnpm)
-RUN npm install --no-save --omit=dev prisma@7.5.0 @prisma/client@7.5.0 @prisma/engines@7.5.0 \
-  && chown -R nextjs:nodejs /app/node_modules /app/prisma
+# Install Prisma CLI + engines in an ISOLATED directory (avoids conflicts with standalone's node_modules)
+RUN mkdir -p /opt/prisma \
+  && cd /opt/prisma \
+  && echo '{"name":"prisma-cli","version":"1.0.0","private":true}' > package.json \
+  && npm install --no-save --omit=dev prisma@7.5.0 @prisma/engines@7.5.0 \
+  && chown -R nextjs:nodejs /opt/prisma /app/prisma
 
 USER nextjs
 
