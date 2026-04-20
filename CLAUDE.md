@@ -1,5 +1,76 @@
 # CLAUDE.md — AIRank Project Guidelines
 
+## 🤖 AUTONOMOUS AUDIT-FIX-SHIP PROTOCOL
+
+Quand l'utilisateur demande « fais tous les tests E2E + remonte tous les soucis + gère toutes les issues » (ou équivalent), suis ce protocole exact :
+
+### 0. Setup (une seule fois au début de la session)
+- Vérifier `gh auth status` et git remote
+- Vérifier que le staging Coolify est accessible et fonctionnel
+- Si une branche de travail n'existe pas, repartir de `main` à jour
+
+### 1. Phase AUDIT (1x par session)
+- **Spawn un agent `general-purpose` en background** pour E2E testing contre le staging
+- L'agent doit : probe HTTP toutes les pages, teste toutes les API critiques avec cookies session, teste les 2 tiers (FREE / AGENCY), vérifie les paywalls, code-review des fichiers clés
+- Output attendu : ≥ 20 issues structurées (title, severity, category, reproduction, fix_hint, files)
+
+### 2. Phase CREATE ISSUES (batch)
+- Pour chaque issue remontée, créer une GitHub issue via `gh issue create` avec :
+  - Title clair, actionnable
+  - Body : description + reproduction steps + fix hint + files
+  - Labels : `severity/{critical|high|medium|low}`, `category/{security|bug|ux|perf|consistency|missing|tech-debt}`, `auto-audit`
+- Ranger par priorité : critical > high > medium > low
+
+### 3. Phase LOOP — par issue (itératif)
+
+Pour CHAQUE issue, dans l'ordre de priorité :
+
+1. **Branch** : créer `fix/issue-<number>` depuis la dernière `stg`
+2. **Fix** : coder la correction dans le repo
+3. **Tests** :
+   - Si test unitaire/intégration pertinent → `src/__tests__/` ou adjacent au code
+   - Run `pnpm test:run` — doit passer
+4. **Local validation** : `pnpm build` — zéro erreur TS
+5. **Commit** : message `fix: <titre issue> (#<num>)` avec `Closes #<num>` dans le body
+6. **Push** : sur `stg` (ou PR si c'est critique)
+7. **Deploy staging** : trigger Coolify API → attendre `finished` via Monitor
+8. **E2E verify staging** : curl les endpoints impactés + check logs runtime
+9. **Merge vers main** : `git push origin stg:main` (si staging OK)
+10. **Deploy production** : trigger l'app prod Coolify → attendre `finished`
+11. **E2E verify prod** : même check sur URL prod
+12. **Close l'issue** : `gh issue close <num> --comment "Fixed in <sha>. Deployed to staging + prod. E2E verified."`
+13. **Passer à l'issue suivante**
+
+### 4. Règles d'arrêt
+- Si build fail → fix avant de passer à la suite
+- Si deploy staging fail → rollback (git revert) + investiguer + re-fix
+- Si E2E staging fail → ne PAS merger vers main, rouvrir l'issue
+- Si deploy prod fail → rollback prod immédiat
+- Si l'issue est ambiguë → commenter sur l'issue et skip (ne pas merger une fix douteuse)
+
+### 5. Documentation continue
+- Après chaque fix, si un pattern revient 2+ fois → l'ajouter dans "Common Pitfalls" de ce CLAUDE.md
+- Ne jamais ignorer un warning lint/TS — toujours fixer
+
+### 6. Coolify resources (staging + prod)
+```
+Staging app   : airank-frontend-stg (j44sko4080swo4scwww4k0ww)
+Staging URL   : https://stg-app.airank.157.180.43.90.sslip.io
+Staging DB    : airank-db-stg (ow804k84s8os0g408o4wws84)
+Prod app      : AIRank (n8s0408cowgkgcw8gk00skko)
+Prod URL      : https://airank.fr
+Coolify Perso : http://157.180.43.90:8000
+Branches      : main = prod, stg = staging
+```
+
+### 7. Test accounts (staging uniquement)
+```
+AGENCY : test@airank.fr / AirankStg2026!
+FREE   : demo@airank.fr / Demo2026!
+```
+
+---
+
 ## ⚠️ TESTING (MANDATORY — READ THIS FIRST)
 **Every feature MUST be tested before committing.** No exceptions.
 
