@@ -109,24 +109,29 @@ model Competitor {
   id      String @id @default(cuid())
   name    String
   brandId String
-  brand   Brand  @relation(fields: [brandId], references: [id])
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
 }
 
 model Scan {
   id          String       @id @default(cuid())
   brandId     String
-  brand       Brand        @relation(fields: [brandId], references: [id])
+  brand       Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
   query       String
   results     ScanResult[]
   globalScore Int          @default(0)
   llmCount    Int          @default(0) // how many LLMs responded (for confidence score)
   createdAt   DateTime     @default(now())
+
+  @@index([brandId, createdAt(sort: Desc)])
+  @@index([createdAt])
 }
 
 model ScanResult {
   id             String       @id @default(cuid())
   scanId         String
-  scan           Scan         @relation(fields: [scanId], references: [id])
+  scan           Scan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
   llm            LLM
   mentioned      Boolean
   position       Int?
@@ -138,6 +143,8 @@ model ScanResult {
   rawResponse    String
   score          Int          @default(0)   // per-LLM score (0-100)
   citations      Citation[]
+
+  @@index([scanId])
 }
 
 // Citation tracking: a citation is a source URL the LLM referenced when mentioning the brand.
@@ -165,6 +172,8 @@ model CreditUsage {
   action    String   // "scan" | "competitor_analysis" | "content_generation" | "auto_scan"
   details   String?
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model GeneratedContent {
