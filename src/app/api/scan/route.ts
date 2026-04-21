@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       brandId,
       query,
       globalScore,
+      llmCount: results.length,
       results: {
         create: results.map((r) => {
           const nuanced = r.mentioned ? analyzeSentiment(r.context ?? r.rawResponse) : null

@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       brandId,
       query,
       globalScore,
+      llmCount: results.length,
       results: {
         create: results.map((r) => ({
           llm: r.llm,
