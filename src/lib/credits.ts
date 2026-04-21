@@ -1,4 +1,5 @@
 import { prisma } from './db'
+import { PLAN_CREDITS as PLAN_CREDITS_CLIENT } from './plan-data'
 
 export const CREDIT_COSTS = {
   scan: 10,
@@ -10,12 +11,8 @@ export const CREDIT_COSTS = {
   sector_watch: 2,
 } as const
 
-export const PLAN_CREDITS = {
-  FREE: 20,
-  STARTER: 500,
-  PRO: 2000,
-  AGENCY: 10000,
-} as const
+// Single source of truth for per-plan credit allotments (re-exported from plan-data.ts)
+export const PLAN_CREDITS = PLAN_CREDITS_CLIENT
 
 export async function useCredits(
   userId: string,

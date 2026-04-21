@@ -28,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AlertsBadge } from '@/components/dashboard/AlertsPanel'
+import { PLAN_CREDITS } from '@/lib/plan-data'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, proOnly: false },
@@ -50,13 +51,6 @@ const navItems = [
 
 const PRO_PLANS = ['PRO', 'AGENCY']
 
-const PLAN_CREDITS_MAP: Record<string, number> = {
-  FREE: 20,
-  STARTER: 500,
-  PRO: 2000,
-  AGENCY: 10000,
-}
-
 const PLAN_BADGE: Record<string, string> = {
   FREE: 'bg-zinc-800 text-zinc-400',
   STARTER: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -78,7 +72,7 @@ function SidebarInner({
 }: SidebarProps & { onClose?: () => void }) {
   const pathname = usePathname()
   const [credits, setCredits] = useState(0)
-  const creditsMax = PLAN_CREDITS_MAP[userPlan] ?? 20
+  const creditsMax = (PLAN_CREDITS as Record<string, number>)[userPlan] ?? 20
   const pct = creditsMax > 0 ? Math.min(100, Math.round((credits / creditsMax) * 100)) : 0
 
   const refreshCredits = () => {

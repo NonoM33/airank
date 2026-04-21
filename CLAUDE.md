@@ -135,10 +135,29 @@ FREE   : demo@airank.fr / Demo2026!
 - **LLM Scanning**: OpenRouter (1 key → GPT-4o-mini, Claude Haiku, Sonar, Gemini Flash)
 
 ## Credit System
-- Free: 20 credits (one-time)
-- Starter: 50/month, Pro: 200/month, Agency: 1000/month
-- Recharges: 50→9€, 200→29€, 500→59€
-- Costs: scan=1, analysis=2, benchmark=3, content=3
+
+**Source de vérité unique** : `src/lib/credits.ts` (exporté comme `PLAN_CREDITS` + `CREDIT_COSTS`). Toute la UI (sidebar, billing, pricing) DOIT lire ces consts — ne jamais redéfinir ailleurs.
+
+Allotments par plan :
+- FREE: 20 credits (one-time, seed au signup)
+- STARTER: 500 credits / mois
+- PRO: 2000 credits / mois
+- AGENCY: 10000 credits / mois
+
+Coûts par action (aligné sur CREDIT_COSTS) :
+- scan / auto_scan : 10
+- competitor_analysis : 20
+- content_faq / content_press : 20
+- content_article : 30
+- sector_watch : 2
+
+Credit packs (one-time Stripe) :
+- PACK_50 → 9€
+- PACK_200 → 29€
+- PACK_500 → 59€
+- PACK_2000 → 199€ (Enterprise)
+
+**Seeding** : sur upgrade de plan (sync-plan ou Stripe webhook), les crédits montent à `PLAN_CREDITS[nouveau plan]` sans jamais réduire la balance existante (on ne punit pas un downgrade mid-cycle).
 
 ## Stripe Configuration
 - Mode: Test (sk_test_...)

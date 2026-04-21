@@ -1,4 +1,14 @@
 // Client-safe plan data — no DB imports
+
+// Single source of truth for per-plan credit allotments.
+// Server-side uses `@/lib/credits`'s PLAN_CREDITS which re-exports this.
+export const PLAN_CREDITS = {
+  FREE: 20,
+  STARTER: 500,
+  PRO: 2000,
+  AGENCY: 10000,
+} as const
+
 export const PLAN_LIMITS = {
   FREE: {
     brands: 1,
