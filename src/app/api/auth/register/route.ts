@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { hashPassword } from '@/lib/password'
 import { z } from 'zod'
 
 const registerSchema = z.object({
@@ -23,8 +24,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Cet email est déjà utilisé.' }, { status: 409 })
   }
 
+  const hashed = await hashPassword(password)
   const user = await prisma.user.create({
-    data: { name, email, password },
+    data: { name, email, password: hashed },
   })
 
   return NextResponse.json({ id: user.id }, { status: 201 })

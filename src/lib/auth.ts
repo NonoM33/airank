@@ -3,6 +3,9 @@ import Credentials from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from './db'
 import { z } from 'zod'
+import { verifyAndMigratePassword } from './password'
+
+export { hashPassword, verifyAndMigratePassword, isBcryptHash } from './password'
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -31,8 +34,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const user = await prisma.user.findUnique({ where: { email } })
         if (!user || !user.password) return null
 
-        // Simple password check (in production: use bcrypt)
-        if (user.password !== password) return null
+        const ok = await verifyAndMigratePassword(user.id, user.password, password)
+        if (!ok) return null
 
         return { id: user.id, email: user.email, name: user.name }
       },
