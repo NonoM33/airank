@@ -1,7 +1,12 @@
 import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/db'
+import { PLAN_CREDITS } from '@/lib/credits'
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
+
+const PLAN_RANK: Record<'FREE' | 'STARTER' | 'PRO' | 'AGENCY', number> = {
+  FREE: 0, STARTER: 1, PRO: 2, AGENCY: 3,
+}
 
 // Disable body parsing - Stripe needs raw body for signature verification
 export const dynamic = 'force-dynamic'
@@ -14,12 +19,22 @@ const PRICE_TO_PLAN: Record<string, 'STARTER' | 'PRO' | 'AGENCY'> = {
 }
 
 async function updateUserPlan(customerId: string, plan: 'FREE' | 'STARTER' | 'PRO' | 'AGENCY') {
-  const result = await prisma.user.updateMany({
+  // Fetch current plan/credits so we can seed credits on upgrade without punishing on downgrade
+  const users = await prisma.user.findMany({
     where: { stripeId: customerId },
-    data: { plan },
+    select: { id: true, plan: true, credits: true },
   })
-  console.log(`[Webhook] Updated ${result.count} user(s) to plan ${plan} for customer ${customerId}`)
-  return result
+  for (const u of users) {
+    const isUpgrade = PLAN_RANK[plan] > PLAN_RANK[u.plan as keyof typeof PLAN_RANK]
+    const targetAllotment = PLAN_CREDITS[plan]
+    const nextCredits = isUpgrade ? Math.max(u.credits, targetAllotment) : u.credits
+    await prisma.user.update({
+      where: { id: u.id },
+      data: { plan, credits: nextCredits },
+    })
+  }
+  console.log(`[Webhook] Updated ${users.length} user(s) to plan ${plan} for customer ${customerId}`)
+  return { count: users.length }
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
@@ -60,10 +75,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   console.log(`[Webhook] checkout.session.completed: userId=${userId}, plan=${plan}, customer=${customerId}`)
 
+  // Seed credits on upgrade (keep existing if already higher)
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, credits: true },
+  })
+  const isUpgrade =
+    existing && PLAN_RANK[plan] > PLAN_RANK[existing.plan as keyof typeof PLAN_RANK]
+  const nextCredits = isUpgrade
+    ? Math.max(existing!.credits, PLAN_CREDITS[plan])
+    : existing?.credits ?? PLAN_CREDITS[plan]
+
   await prisma.user.update({
     where: { id: userId },
     data: {
       plan,
+      credits: nextCredits,
       ...(customerId ? { stripeId: customerId } : {}),
     },
   })
