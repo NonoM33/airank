@@ -34,8 +34,14 @@ export default function CitationsPage() {
       .then((bs: Brand[]) => {
         setBrands(bs)
         if (bs[0]) setSelectedBrand(bs[0].id)
+        // If user has no brands, no further fetch will happen —
+        // release the loading state so the empty-state can render (#24).
+        else setLoading(false)
       })
-      .catch(() => setBrands([]))
+      .catch(() => {
+        setBrands([])
+        setLoading(false)
+      })
   }, [])
 
   useEffect(() => {
@@ -85,7 +91,22 @@ export default function CitationsPage() {
         </div>
       )}
 
-      {!loading && data && data.total === 0 && (
+      {!loading && brands.length === 0 && (
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <Globe className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground mb-3">
+            Ajoutez d&apos;abord une marque pour analyser ses citations.
+          </p>
+          <a
+            href="/settings"
+            className="inline-block px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+          >
+            + Ajouter une marque
+          </a>
+        </div>
+      )}
+
+      {!loading && brands.length > 0 && data && data.total === 0 && (
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <Globe className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">

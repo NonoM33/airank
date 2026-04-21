@@ -31,21 +31,21 @@ import { AlertsBadge } from '@/components/dashboard/AlertsPanel'
 import { PLAN_CREDITS } from '@/lib/plan-data'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, proOnly: false },
-  { href: '/settings', label: 'Mes Marques', icon: Building2, proOnly: false },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, proOnly: false },
+  { href: '/settings', label: 'Marques', icon: Building2, proOnly: false },
   { href: '/scans', label: 'Scans', icon: Search, proOnly: false },
   { href: '/seo-tools', label: 'Outils SEO', icon: Wrench, proOnly: false },
   { href: '/heatmap', label: 'Heatmap', icon: BarChart2, proOnly: true },
   { href: '/compare', label: 'Comparer', icon: Columns, proOnly: true },
   { href: '/citations', label: 'Citations', icon: Link2, proOnly: false },
-  { href: '/analytics', label: 'Analytics', icon: Activity, proOnly: false },
+  { href: '/analytics', label: 'Analyses', icon: Activity, proOnly: false },
   { href: '/alerts', label: 'Alertes', icon: Bell, proOnly: false },
   { href: '/veille', label: 'Veille', icon: Activity, proOnly: false },
   { href: '/growth', label: 'Croissance', icon: TrendingUp, proOnly: false },
   { href: '/team', label: 'Équipe', icon: Users, proOnly: false },
-  { href: '/white-label', label: 'White-label', icon: Palette, proOnly: true },
+  { href: '/white-label', label: 'Marque blanche', icon: Palette, proOnly: true },
   { href: '/api-keys', label: 'Clés API', icon: Key, proOnly: true },
-  { href: '/api-docs', label: 'API Docs', icon: Book, proOnly: true },
+  { href: '/api-docs', label: 'Documentation API', icon: Book, proOnly: true },
   { href: '/billing', label: 'Abonnement', icon: CreditCard, proOnly: false },
 ]
 
@@ -168,11 +168,16 @@ function SidebarInner({
           <Badge className={`text-xs border ${PLAN_BADGE[userPlan] ?? PLAN_BADGE.FREE}`}>
             {userPlan}
           </Badge>
-          {userPlan === 'FREE' || userPlan === 'STARTER' ? (
-            <Link href="/billing" className="text-xs text-primary hover:underline" onClick={onClose}>
-              Upgrader →
+          {userPlan === 'FREE' && (
+            <Link href="/billing?target=STARTER" className="text-xs text-primary hover:underline" onClick={onClose}>
+              Passer en Starter →
             </Link>
-          ) : null}
+          )}
+          {userPlan === 'STARTER' && (
+            <Link href="/billing?target=PRO" className="text-xs text-primary hover:underline" onClick={onClose}>
+              Passer en Pro →
+            </Link>
+          )}
         </div>
         <Button
           variant="ghost"
