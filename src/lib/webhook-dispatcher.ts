@@ -14,11 +14,15 @@ export async function dispatchWebhook(
   event: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  // Collect Slack URLs already sent to avoid double-send
+  const slackUrlsSent = new Set<string>()
+
   // Also send to user's slack preference if configured
   try {
     const prefs = await prisma.notificationPreference.findUnique({ where: { userId } })
     if (prefs?.slackEnabled && prefs.slackWebhook) {
       const msg = formatSlackMessage(event, data)
+      slackUrlsSent.add(prefs.slackWebhook)
       void sendToSlack(prefs.slackWebhook, msg)
     }
   } catch (err) {
@@ -56,8 +60,13 @@ export async function dispatchWebhook(
 
   await Promise.allSettled(
     targets.map(async (wh) => {
-      // Slack URLs: send pretty format
+      // Slack URLs: send pretty format, dedupe against preference-level slack
       if (wh.url.includes('hooks.slack.com')) {
+        if (slackUrlsSent.has(wh.url)) {
+          // Already delivered via NotificationPreference — skip to avoid double-send
+          return
+        }
+        slackUrlsSent.add(wh.url)
         const msg = formatSlackMessage(event, data)
         const ok = await sendToSlack(wh.url, msg)
         await logDelivery(wh.id, event, payload, ok ? 'success' : 'failed', ok ? 200 : 0)
@@ -88,9 +97,23 @@ export async function dispatchWebhook(
   )
 }
 
+// Denylist of field name patterns that must NEVER be serialized to external webhooks.
+// Case-insensitive substring match.
+const SENSITIVE_FIELD_PATTERNS = [
+  'password', 'secret', 'token', 'apikey', 'api_key',
+  'authorization', 'cookie', 'session', 'stripe', 'webhook_secret',
+  'private_key', 'privatekey',
+]
+
+function isSensitiveField(name: string): boolean {
+  const lower = name.toLowerCase()
+  return SENSITIVE_FIELD_PATTERNS.some((p) => lower.includes(p))
+}
+
 function flattenForZapier(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(data)) {
+    if (isSensitiveField(k)) continue
     if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
       out[`data_${k}`] = v
     }
