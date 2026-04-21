@@ -54,23 +54,43 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const slug = slugify(parsed.data.name) + '-' + Math.random().toString(36).slice(2, 6)
-
-  const team = await prisma.team.create({
-    data: {
-      name: parsed.data.name,
-      slug,
-      ownerId: session.user.id,
-      seatLimit: limits.teamSeats,
-      members: {
-        create: { userId: session.user.id, role: 'OWNER' },
-      },
-    },
-  })
+  // Retry on slug collision (#20). 5 attempts before giving up.
+  const base = slugify(parsed.data.name)
+  let team = null
+  let lastErr: unknown = null
+  for (let i = 0; i < 5; i++) {
+    const slug = base + '-' + randomSuffix()
+    try {
+      team = await prisma.team.create({
+        data: {
+          name: parsed.data.name,
+          slug,
+          ownerId: session.user.id,
+          seatLimit: limits.teamSeats,
+          members: {
+            create: { userId: session.user.id, role: 'OWNER' },
+          },
+        },
+      })
+      break
+    } catch (err) {
+      lastErr = err
+      // Prisma unique constraint code P2002 → retry with new slug
+      if ((err as { code?: string })?.code !== 'P2002') throw err
+    }
+  }
+  if (!team) {
+    console.error('[teams] slug collision after 5 attempts', lastErr)
+    return NextResponse.json({ error: 'Réessayez dans un instant' }, { status: 503 })
+  }
 
   return NextResponse.json(team)
 }
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40)
+}
+
+function randomSuffix(): string {
+  return Math.random().toString(36).slice(2, 8) // 6 chars (36^6 = ~2B)
 }

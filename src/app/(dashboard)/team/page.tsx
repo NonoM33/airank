@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Users, Plus, UserPlus, Trash2, Mail } from 'lucide-react'
+import { Users, Plus, UserPlus, Trash2, Mail, Copy, Check } from 'lucide-react'
 import { CreditCTA } from '@/components/ui/credit-cta'
+import { toast } from 'sonner'
 
 interface Team {
   id: string
@@ -24,6 +25,7 @@ interface Invite {
   id: string
   email: string
   role: string
+  token: string
   expiresAt: string
   createdAt: string
 }
@@ -89,11 +91,32 @@ export default function TeamPage() {
       fetch(`/api/teams/${selected.id}/invites`)
         .then((r) => r.json())
         .then((dd) => setInvites(dd.invites ?? []))
-      // Show invite URL in clipboard
       if (d.inviteUrl) {
-        navigator.clipboard.writeText(`${window.location.origin}${d.inviteUrl}`)
-        alert(`Invitation envoyée. Lien copié dans le presse-papiers.`)
+        const fullUrl = `${window.location.origin}${d.inviteUrl}`
+        try {
+          await navigator.clipboard.writeText(fullUrl)
+          toast.success('Invitation envoyée', {
+            description: 'Lien copié dans le presse-papiers',
+          })
+        } catch {
+          // Clipboard may be denied; show the URL in the toast
+          toast.success('Invitation envoyée', { description: fullUrl })
+        }
+      } else {
+        toast.success('Invitation envoyée')
       }
+    } else {
+      toast.error('Échec de l\'invitation')
+    }
+  }
+
+  const copyInviteLink = async (token: string) => {
+    const url = `${window.location.origin}/team/accept?token=${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Lien copié')
+    } catch {
+      toast.info(url)
     }
   }
 
@@ -166,7 +189,14 @@ export default function TeamPage() {
           <div className="grid grid-cols-3 gap-4 mb-6">
             <Stat label="Membres" value={`${members.length} / ${selected.seatLimit}`} />
             <Stat label="Invitations en attente" value={String(invites.length)} />
-            <Stat label="Plan" value="—" />
+            <Stat
+              label="Sièges utilisés"
+              value={
+                selected.seatLimit > 0
+                  ? `${Math.round((members.length / selected.seatLimit) * 100)}%`
+                  : '—'
+              }
+            />
           </div>
 
           <div className="rounded-xl border border-border bg-card p-5 mb-6">
@@ -233,8 +263,14 @@ export default function TeamPage() {
                 {invites.map((i) => (
                   <li key={i.id} className="px-5 py-3 flex items-center gap-2 text-sm">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1">{i.email}</span>
+                    <span className="flex-1 truncate">{i.email}</span>
                     <span className="text-xs text-muted-foreground">{i.role}</span>
+                    <button
+                      onClick={() => copyInviteLink(i.token)}
+                      className="text-xs px-2 py-1 rounded border border-border hover:bg-accent inline-flex items-center gap-1"
+                    >
+                      <Copy className="h-3 w-3" /> Copier
+                    </button>
                   </li>
                 ))}
               </ul>

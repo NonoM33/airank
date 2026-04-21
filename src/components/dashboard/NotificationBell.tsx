@@ -33,16 +33,17 @@ export function NotificationBell() {
   }
 
   useEffect(() => {
+    // Initial fetch only; real-time updates arrive via SSE.
+    // Polling was removed (#15): the SSE stream is authoritative and the
+    // 60s polling was racing with push events (double-count of unread).
     load()
-    const t = setInterval(load, 60_000)
-    return () => clearInterval(t)
   }, [])
 
   useEventStream({
     notification: (data) => {
       const n = data as Notification
       setNotifications((prev) => [n, ...prev].slice(0, 50))
-      setUnread((u) => u + 1)
+      if (!n.read) setUnread((u) => u + 1)
     },
   })
 
@@ -55,8 +56,15 @@ export function NotificationBell() {
   }, [open])
 
   const markAllRead = async () => {
-    await fetch('/api/notifications/read-all', { method: 'POST' })
-    load()
+    // Optimistic UI: mark everything read immediately, reconcile with server after.
+    setUnread(0)
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    try {
+      await fetch('/api/notifications/read-all', { method: 'POST' })
+    } catch {
+      // On failure, reload truth from server so the UI converges back.
+      load()
+    }
   }
 
   return (
