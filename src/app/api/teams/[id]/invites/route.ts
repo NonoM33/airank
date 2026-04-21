@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
+import { getPlanLimits } from '@/lib/plan-data'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
@@ -25,12 +26,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         { members: { some: { userId: session.user.id, role: { in: ['OWNER', 'ADMIN'] } } } },
       ],
     },
-    include: { _count: { select: { members: true } } },
+    include: {
+      _count: { select: { members: true } },
+      owner: { select: { plan: true } },
+    },
   })
   if (!team) return NextResponse.json({ error: 'Équipe introuvable ou accès refusé' }, { status: 403 })
 
-  if (team._count.members >= team.seatLimit) {
-    return NextResponse.json({ error: 'Limite de sièges atteinte', upgrade: true }, { status: 402 })
+  // #21: compute seat limit dynamically from the owner's CURRENT plan,
+  // not from the stored team.seatLimit (which was frozen at create time).
+  // Existing members above the limit are NOT kicked — we only block NEW invites.
+  const ownerLimits = getPlanLimits(team.owner?.plan ?? 'FREE')
+  const effectiveSeatLimit = ownerLimits.teamSeats
+  if (team._count.members >= effectiveSeatLimit) {
+    return NextResponse.json(
+      { error: 'Limite de sièges atteinte pour votre plan actuel', upgrade: true, seatLimit: effectiveSeatLimit },
+      { status: 402 }
+    )
   }
 
   const body = await req.json()
