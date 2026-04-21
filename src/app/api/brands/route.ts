@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 const brandSchema = z.object({
   name: z.string().min(1).max(100),
   domain: z.string().optional(),
+  sector: z.string().max(100).optional(),
   keywords: z.array(z.string()).default([]),
 })
 
@@ -50,12 +51,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { name, domain, keywords } = parsed.data
+  const { name, domain, sector, keywords } = parsed.data
 
   const brand = await prisma.brand.create({
     data: {
       name,
       domain,
+      sector,
       keywords: JSON.stringify(keywords),
       userId: session.user.id,
     },
