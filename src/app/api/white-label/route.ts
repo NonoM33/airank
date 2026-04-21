@@ -5,6 +5,8 @@ import { getPlanLimits } from '@/lib/plan-data'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
+import { sanitizeCss } from '@/lib/css-sanitizer'
+
 const schema = z.object({
   companyName: z.string().max(100).optional().nullable(),
   logoUrl: z.string().url().optional().nullable(),
@@ -15,7 +17,7 @@ const schema = z.object({
   supportEmail: z.string().email().optional().nullable(),
   footerText: z.string().max(500).optional().nullable(),
   hideAirankBranding: z.boolean().optional(),
-  customCss: z.string().max(10000).optional().nullable(),
+  customCss: z.string().max(10000).optional().nullable().transform((v) => (v ? sanitizeCss(v) : v)),
 })
 
 export async function GET() {
