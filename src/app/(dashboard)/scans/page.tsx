@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, BarChart3, Zap, TrendingUp, Calendar } from 'lucide-react'
 import { NewScanForm } from '@/components/dashboard/NewScanForm'
-import { BrandFilter } from '@/components/dashboard/BrandFilter'
+import { useBrand } from '@/lib/brand-context'
 
 function getScoreColor(score: number) {
   if (score >= 70) return 'text-green-400'
@@ -21,13 +20,6 @@ const LLM_SHORT: Record<string, string> = {
   GEMINI: 'GEM',
 }
 
-interface Brand {
-  id: string
-  name: string
-  domain: string | null
-  keywords: string | string[]
-}
-
 interface Scan {
   id: string
   query: string
@@ -38,31 +30,24 @@ interface Scan {
 }
 
 export default function ScansPage() {
-  const searchParams = useSearchParams()
-  const brandFilter = searchParams.get('brand')
-
-  const [brands, setBrands] = useState<Brand[] | null>(null)
+  const { brands: ctxBrands, currentBrandId, currentBrand, loading: brandsLoading } = useBrand()
   const [scans, setScans] = useState<Scan[]>([])
+  const [scansLoading, setScansLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/brands')
+    if (brandsLoading) return
+    if (!currentBrandId) {
+      setScansLoading(false)
+      return
+    }
+    setScansLoading(true)
+    fetch(`/api/scans?brandId=${currentBrandId}&results=true`)
       .then((r) => r.json())
-      .then((data: Brand[]) => {
-        setBrands(data)
-        const targetBrandId = brandFilter ?? data[0]?.id
-        if (targetBrandId) {
-          const url = brandFilter
-            ? `/api/scans?brandId=${brandFilter}&results=true`
-            : `/api/scans?results=true`
-          return fetch(url)
-            .then((r) => r.json())
-            .then(setScans)
-        }
-      })
-      .catch(() => setBrands([]))
-  }, [brandFilter])
+      .then(setScans)
+      .finally(() => setScansLoading(false))
+  }, [currentBrandId, brandsLoading])
 
-  if (!brands) {
+  if (brandsLoading || scansLoading) {
     return (
       <div className="p-4 lg:p-6 space-y-6">
         <h1 className="text-2xl font-bold">Scans</h1>
@@ -71,15 +56,14 @@ export default function ScansPage() {
     )
   }
 
-  const brandsForForm = brands.map((b) => ({
+  // Adapt brands list for the NewScanForm (keeps existing shape)
+  const brandsForForm = ctxBrands.map((b) => ({
     id: b.id,
     name: b.name,
     domain: b.domain ?? null,
-    keywords: (() => {
-      if (Array.isArray(b.keywords)) return b.keywords as string[]
-      try { return JSON.parse(b.keywords as string) as string[] } catch { return [] }
-    })(),
+    keywords: [] as string[],
   }))
+  const brands = ctxBrands
 
   if (brands.length === 0) {
     return (
@@ -99,7 +83,7 @@ export default function ScansPage() {
     )
   }
 
-  const activeBrand = brandFilter ? (brands.find((b) => b.id === brandFilter) ?? null) : null
+  const activeBrand = currentBrand
   const defaultBrandId = activeBrand?.id ?? brands[0].id
 
   const avgScore = scans.length > 0
@@ -118,20 +102,12 @@ export default function ScansPage() {
           <p className="text-muted-foreground">
             {activeBrand ? (
               <>Analyses pour <span className="text-foreground font-medium">{activeBrand.name}</span></>
-            ) : brands.length > 1 ? (
-              'Toutes les analyses'
             ) : (
-              <>Analyses pour <span className="text-foreground font-medium">{brands[0].name}</span></>
+              'Historique de vos analyses'
             )}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {brands.length > 1 && (
-            <BrandFilter
-              brands={brands.map((b) => ({ id: b.id, name: b.name }))}
-              activeBrandId={activeBrand?.id ?? null}
-            />
-          )}
           <NewScanForm brands={brandsForForm} defaultBrandId={defaultBrandId} />
         </div>
       </div>
@@ -185,11 +161,6 @@ export default function ScansPage() {
                   <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Requête
                   </th>
-                  {brands.length > 1 && !activeBrand && (
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">
-                      Marque
-                    </th>
-                  )}
                   <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
                     Date
                   </th>
@@ -215,16 +186,6 @@ export default function ScansPage() {
                           })}
                         </p>
                       </td>
-                      {brands.length > 1 && !activeBrand && (
-                        <td className="px-4 py-3.5 hidden md:table-cell">
-                          <Link
-                            href={`/brands/${scan.brand.id}`}
-                            className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                          >
-                            {scan.brand.name}
-                          </Link>
-                        </td>
-                      )}
                       <td className="px-4 py-3.5 hidden sm:table-cell">
                         <p className="text-sm text-muted-foreground whitespace-nowrap">
                           {new Date(scan.createdAt).toLocaleDateString('fr-FR', {

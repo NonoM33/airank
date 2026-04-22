@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Bell, Plus, Trash2, AlertTriangle } from 'lucide-react'
-
-interface Brand {
-  id: string
-  name: string
-}
+import { useBrand } from '@/lib/brand-context'
 
 interface UserAlert {
   id: string
@@ -29,13 +25,13 @@ interface ScoreAlert {
 }
 
 export default function AlertsPage() {
-  const [brands, setBrands] = useState<Brand[]>([])
+  const { brands, currentBrandId, currentBrand } = useBrand()
   const [userAlerts, setUserAlerts] = useState<UserAlert[]>([])
   const [scoreAlerts, setScoreAlerts] = useState<ScoreAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
-  // Form
+  // Form — alert target brand defaults to the globally-selected brand
   const [newType, setNewType] = useState<'score_below' | 'score_above' | 'no_mention' | 'competitor_spike'>('score_below')
   const [newBrandId, setNewBrandId] = useState<string>('')
   const [newThreshold, setNewThreshold] = useState<number>(50)
@@ -43,22 +39,27 @@ export default function AlertsPage() {
 
   const reload = async () => {
     setLoading(true)
-    const [bs, ua, sa] = await Promise.all([
-      fetch('/api/brands').then((r) => r.json()).catch(() => []),
-      fetch('/api/alerts?source=alert').then((r) => r.json()).catch(() => ({ alerts: [] })),
-      fetch('/api/alerts').then((r) => r.json()).catch(() => ({ alerts: [] })),
+    const scopedUrl = currentBrandId
+      ? `/api/alerts?source=alert&brandId=${currentBrandId}`
+      : '/api/alerts?source=alert'
+    const scopedScoreUrl = currentBrandId
+      ? `/api/alerts?brandId=${currentBrandId}`
+      : '/api/alerts'
+    const [ua, sa] = await Promise.all([
+      fetch(scopedUrl).then((r) => r.json()).catch(() => ({ alerts: [] })),
+      fetch(scopedScoreUrl).then((r) => r.json()).catch(() => ({ alerts: [] })),
     ])
-    setBrands(bs)
     setUserAlerts(ua.alerts ?? [])
     setScoreAlerts(sa.alerts ?? [])
-    if (bs[0] && !newBrandId) setNewBrandId(bs[0].id)
     setLoading(false)
   }
 
   useEffect(() => {
+    // Default the form's target brand to the globally-selected one
+    if (currentBrandId && !newBrandId) setNewBrandId(currentBrandId)
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentBrandId])
 
   const create = async () => {
     if (!newMessage.trim()) return
@@ -95,7 +96,9 @@ export default function AlertsPage() {
         <div>
           <h1 className="text-xl font-bold">Alertes</h1>
           <p className="text-sm text-muted-foreground">
-            Définissez des seuils et consultez les dérives détectées
+            {currentBrand
+              ? `Seuils et dérives détectées pour ${currentBrand.name}`
+              : 'Définissez des seuils et consultez les dérives détectées'}
           </p>
         </div>
       </div>

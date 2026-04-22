@@ -2,11 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Link2, ExternalLink, Globe } from 'lucide-react'
-
-interface Brand {
-  id: string
-  name: string
-}
+import { useBrand } from '@/lib/brand-context'
 
 interface CitationData {
   total: number
@@ -23,35 +19,22 @@ interface CitationData {
 }
 
 export default function CitationsPage() {
-  const [brands, setBrands] = useState<Brand[]>([])
-  const [selectedBrand, setSelectedBrand] = useState<string>('')
+  const { brands, currentBrandId, currentBrand, loading: brandsLoading } = useBrand()
   const [data, setData] = useState<CitationData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/brands')
-      .then((r) => r.json())
-      .then((bs: Brand[]) => {
-        setBrands(bs)
-        if (bs[0]) setSelectedBrand(bs[0].id)
-        // If user has no brands, no further fetch will happen —
-        // release the loading state so the empty-state can render (#24).
-        else setLoading(false)
-      })
-      .catch(() => {
-        setBrands([])
-        setLoading(false)
-      })
-  }, [])
-
-  useEffect(() => {
-    if (!selectedBrand) return
+    if (brandsLoading) return
+    if (!currentBrandId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
-    fetch(`/api/citations?brandId=${selectedBrand}`)
+    fetch(`/api/citations?brandId=${currentBrandId}`)
       .then((r) => r.json())
       .then((d) => setData(d))
       .finally(() => setLoading(false))
-  }, [selectedBrand])
+  }, [currentBrandId, brandsLoading])
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -60,30 +43,14 @@ export default function CitationsPage() {
           <Link2 className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold">Citations & sources</h1>
+          <h1 className="text-xl font-bold">Citations &amp; sources</h1>
           <p className="text-sm text-muted-foreground">
-            Quelles sources les IA citent-elles en parlant de votre marque ?
+            {currentBrand
+              ? `Sources citées par les IA pour ${currentBrand.name}`
+              : 'Quelles sources les IA citent-elles en parlant de votre marque ?'}
           </p>
         </div>
       </div>
-
-      {brands.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {brands.map((b) => (
-            <button
-              key={b.id}
-              onClick={() => setSelectedBrand(b.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                selectedBrand === b.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card border border-border hover:bg-accent'
-              }`}
-            >
-              {b.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {loading && (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">

@@ -1,36 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Code2, Copy, Check } from 'lucide-react'
-
-interface Brand {
-  id: string
-  name: string
-}
+import { useBrand } from '@/lib/brand-context'
 
 export default function WidgetPage() {
-  const [brands, setBrands] = useState<Brand[]>([])
-  const [brandId, setBrandId] = useState('')
+  const { brands, currentBrandId, currentBrand } = useBrand()
   const [snippet, setSnippet] = useState('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/brands')
-      .then((r) => r.json())
-      .then((bs: Brand[]) => {
-        setBrands(bs)
-        if (bs[0]) setBrandId(bs[0].id)
-      })
-  }, [])
-
   const generate = async () => {
-    if (!brandId) return
+    if (!currentBrandId) return
     setLoading(true)
     const res = await fetch('/api/widget/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brandId }),
+      body: JSON.stringify({ brandId: currentBrandId }),
     })
     if (res.ok) {
       const d = await res.json()
@@ -69,30 +55,24 @@ export default function WidgetPage() {
         <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Ajoutez d&apos;abord une marque pour générer un widget.
         </div>
+      ) : !currentBrandId ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          Sélectionnez une marque dans la barre latérale pour générer son widget.
+        </div>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-card p-5 mb-6">
-            <label className="block text-xs text-muted-foreground mb-1">Marque</label>
-            <div className="flex gap-2">
-              <select
-                value={brandId}
-                onChange={(e) => setBrandId(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              >
-                {brands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={generate}
-                disabled={loading}
-                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-              >
-                {loading ? 'Génération…' : 'Générer'}
-              </button>
+          <div className="rounded-xl border border-border bg-card p-5 mb-6 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground">Widget pour</div>
+              <div className="text-sm font-semibold truncate">{currentBrand?.name}</div>
             </div>
+            <button
+              onClick={generate}
+              disabled={loading}
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+            >
+              {loading ? 'Génération…' : 'Générer'}
+            </button>
           </div>
 
           {snippet && (

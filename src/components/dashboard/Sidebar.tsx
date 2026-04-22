@@ -28,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AlertsBadge } from '@/components/dashboard/AlertsPanel'
+import { BrandSwitcher } from '@/components/dashboard/BrandSwitcher'
 import { PLAN_CREDITS } from '@/lib/plan-data'
 
 const navItems = [
@@ -102,6 +103,11 @@ function SidebarInner({
             <X className="h-5 w-5" />
           </button>
         )}
+      </div>
+
+      {/* Brand switcher (Stripe-style) — all pages are scoped to the active brand */}
+      <div className="pt-3">
+        <BrandSwitcher onNavigate={onClose} />
       </div>
 
       {/* Nav */}
