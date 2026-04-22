@@ -3,13 +3,15 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   }
 
   const userId = session.user.id
+  const { searchParams } = new URL(req.url)
+  const scopedBrandId = searchParams.get('brandId')
 
   const [allBrands, dbUser] = await Promise.all([
     prisma.brand.findMany({
@@ -26,7 +28,11 @@ export async function GET() {
     return NextResponse.json({ allBrands: [], dbUser })
   }
 
-  if (allBrands.length > 1) {
+  // When a specific brandId is requested (via global BrandSwitcher), always
+  // return the single-brand view for that brand. Fall back to multi-brand grid
+  // only when no brandId is pinned.
+  const scopedBrand = scopedBrandId ? allBrands.find((b) => b.id === scopedBrandId) : null
+  if (allBrands.length > 1 && !scopedBrand) {
     const brandsWithData = await Promise.all(
       allBrands.map(async (brand) => {
         const keywords: string[] = (() => {
@@ -63,8 +69,8 @@ export async function GET() {
     return NextResponse.json({ allBrands, dbUser, brandsWithData })
   }
 
-  // Single brand
-  const brand = allBrands[0]
+  // Single brand — scoped by ?brandId= if provided, else first brand
+  const brand = scopedBrand ?? allBrands[0]
   const [latestScan, prevScan, chartScans, recentScans, allResults, scoreObjective] = await Promise.all([
     prisma.scan.findFirst({
       where: { brandId: brand.id },

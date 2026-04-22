@@ -2,6 +2,7 @@
 
 import { CreditCTA } from '@/components/ui/credit-cta'
 import { notifyCreditsChanged } from '@/lib/credits-event'
+import { useBrandOptional } from '@/lib/brand-context'
 
 import { useState } from 'react'
 import {
@@ -90,7 +91,10 @@ function AnalysisCard({ title, cost, loading, onAnalyze, children }: {
 }
 
 export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
-  const [brandId, setBrandId] = useState(brands[0]?.id ?? '')
+  // Brand is driven by the global BrandSwitcher in the sidebar.
+  // Fall back to first prop brand if context is not yet loaded (initial SSR).
+  const ctx = useBrandOptional()
+  const brandId = ctx?.currentBrandId ?? brands[0]?.id ?? ''
   const [benchmark, setBenchmark] = useState<{ loading: boolean; data: BenchmarkData | null; err: string }>({ loading: false, data: null, err: '' })
   const [sentiment, setSentiment] = useState<{ loading: boolean; data: SentimentData | null; err: string }>({ loading: false, data: null, err: '' })
   const [coverage, setCoverage] = useState<{ loading: boolean; data: CoverageData | null; err: string }>({ loading: false, data: null, err: '' })
@@ -114,16 +118,13 @@ export function AnalyticsDashboard({ brands }: { brands: Brand[] }) {
 
   const TOOLTIP_STYLE = { backgroundColor: '#141416', border: '1px solid #27272A', borderRadius: 8 }
 
+  const currentBrand = brands.find((b) => b.id === brandId) ?? brands[0]
+
   return (
     <div className="space-y-5">
-      {/* Brand selector */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm text-muted-foreground shrink-0">Marque :</label>
-        <select value={brandId} onChange={e => setBrandId(e.target.value)}
-          className="bg-card border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-          {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Analyses pour <span className="text-foreground font-medium">{currentBrand?.name ?? '—'}</span>
+      </p>
 
       {/* Benchmark sectoriel */}
       <AnalysisCard title="Benchmark Sectoriel" cost={3} loading={benchmark.loading} onAnalyze={() => call('/api/benchmark', setBenchmark)}>

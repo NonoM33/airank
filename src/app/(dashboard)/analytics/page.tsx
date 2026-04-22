@@ -1,44 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { AnalyticsDashboard } from '@/components/dashboard/AnalyticsDashboard'
-
-interface Brand {
-  id: string
-  name: string
-  sector: string | null
-}
+import { useBrand } from '@/lib/brand-context'
 
 export default function AnalyticsPage() {
-  const [brands, setBrands] = useState<Brand[] | null>(null)
+  const { brands, loading } = useBrand()
 
-  useEffect(() => {
-    fetch('/api/brands')
-      .then((r) => r.json())
-      .then((data: Brand[]) => setBrands(data))
-      .catch(() => setBrands([]))
-  }, [])
-
-  if (!brands) {
+  if (loading) {
     return (
       <div className="p-4 lg:p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Analytics Avancées</h1>
+          <h1 className="text-2xl font-bold">Analyses avancées</h1>
           <p className="text-muted-foreground text-sm mt-1">Chargement…</p>
         </div>
       </div>
     )
   }
 
+  // AnalyticsDashboard still takes the brands prop (it needs names for display)
+  // but reads the active brand id from the shared BrandContext.
+  const brandsForDashboard = brands.map((b) => ({
+    id: b.id,
+    name: b.name,
+    sector: (b as { sector?: string | null }).sector ?? null,
+  }))
+
   return (
     <div className="p-4 lg:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Analytics Avancées</h1>
+        <h1 className="text-2xl font-bold">Analyses avancées</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Benchmark sectoriel, analyse sentiment, matrice de couverture et score d&apos;autorité IA.
         </p>
       </div>
-      <AnalyticsDashboard brands={brands} />
+      <AnalyticsDashboard brands={brandsForDashboard} />
     </div>
   )
 }

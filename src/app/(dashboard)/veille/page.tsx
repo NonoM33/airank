@@ -15,6 +15,7 @@ import { Bell, TrendingUp, Globe, CheckCheck, Trash2, Plus, Activity } from 'luc
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useBrand } from '@/lib/brand-context'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -169,8 +170,7 @@ function TrendItem({ trend }: { trend: SectorTrend }) {
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function VeillePage() {
-  const [brands, setBrands] = useState<Brand[]>([])
-  const [selectedBrand, setSelectedBrand] = useState<string>('')
+  const { brands, currentBrandId, currentBrand } = useBrand()
   const [chartData, setChartData] = useState<ChartPoint[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [sector, setSector] = useState('')
@@ -180,35 +180,27 @@ export default function VeillePage() {
   const [loadingSector, setLoadingSector] = useState(false)
   const [days, setDays] = useState(30)
 
-  // Load brands
+  // Sync sector input with the active brand's sector
   useEffect(() => {
-    fetch('/api/brands')
-      .then((r) => r.json())
-      .then((data) => {
-        const mainBrands = (data.brands ?? []).filter((b: Brand & { isCompetitor?: boolean }) => !b.isCompetitor)
-        setBrands(mainBrands)
-        if (mainBrands.length > 0) {
-          setSelectedBrand(mainBrands[0].id)
-          if (mainBrands[0].sector) setSector(mainBrands[0].sector)
-        }
-      })
-      .catch(() => {})
-  }, [])
+    if ((currentBrand as { sector?: string } | null)?.sector) {
+      setSector((currentBrand as { sector?: string }).sector ?? '')
+    }
+  }, [currentBrand])
 
   // Load position history
   const loadHistory = useCallback(async () => {
-    if (!selectedBrand) return
+    if (!currentBrandId) return
     setLoadingChart(true)
     try {
       const res = await fetch(
-        `/api/position-tracking?brandId=${selectedBrand}&days=${days}`
+        `/api/position-tracking?brandId=${currentBrandId}&days=${days}`
       )
       const data = await res.json()
       setChartData(data.chartData ?? [])
     } finally {
       setLoadingChart(false)
     }
-  }, [selectedBrand, days])
+  }, [currentBrandId, days])
 
   useEffect(() => {
     loadHistory()
@@ -257,7 +249,6 @@ export default function VeillePage() {
     setLoadingSector(true)
     setSectorAnalysis(null)
     try {
-      const currentBrand = brands.find((b) => b.id === selectedBrand)
       const res = await fetch('/api/sector-watch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,21 +297,7 @@ export default function VeillePage() {
                 Évolution des scores
               </CardTitle>
               <div className="flex items-center gap-2">
-                {/* Brand selector */}
-                {brands.length > 1 && (
-                  <select
-                    value={selectedBrand}
-                    onChange={(e) => setSelectedBrand(e.target.value)}
-                    className="text-xs bg-secondary border border-border rounded px-2 py-1 text-foreground"
-                  >
-                    {brands.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {/* Period selector */}
+                {/* Period selector (brand is driven by the global switcher) */}
                 <select
                   value={days}
                   onChange={(e) => setDays(parseInt(e.target.value))}

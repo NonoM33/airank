@@ -14,6 +14,7 @@ import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap, Settings } from 'luci
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Suspense } from 'react'
+import { useBrand } from '@/lib/brand-context'
 
 function getLLMScore(result: {
   mentioned: boolean
@@ -114,14 +115,18 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { data: session } = useSession()
+  const { currentBrandId } = useBrand()
   const [data, setData] = useState<DashboardData | null>(null)
 
   useEffect(() => {
-    fetch('/api/dashboard/full')
+    const url = currentBrandId
+      ? `/api/dashboard/full?brandId=${encodeURIComponent(currentBrandId)}`
+      : '/api/dashboard/full'
+    fetch(url)
       .then((r) => r.json())
       .then(setData)
       .catch(() => {})
-  }, [])
+  }, [currentBrandId])
 
   const plan = (session?.user as { plan?: string })?.plan ?? 'FREE'
 
@@ -190,9 +195,11 @@ export default function DashboardPage() {
     )
   }
 
-  // ── 2+ brands: multi-brand grid ────────────────────────────────────────────
+  // ── 2+ brands: multi-brand grid (only shown when no brand is actively selected
+  //    in the global switcher — if a brand IS selected, we drop through to the
+  //    single-brand view below scoped to that brand). ──────────────────────────
 
-  if (allBrands.length > 1 && brandsWithData) {
+  if (allBrands.length > 1 && brandsWithData && !currentBrandId) {
     return (
       <div className="p-4 lg:p-6 space-y-5">
         <div className="flex items-center justify-between gap-4">

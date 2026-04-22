@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,7 @@ import {
   Copy, Check, ShieldCheck, AlertCircle, XCircle,
 } from 'lucide-react'
 import { CreditCTA } from '@/components/ui/credit-cta'
+import { useBrandOptional } from '@/lib/brand-context'
 
 type Brand = { id: string; name: string; domain?: string | null }
 type ActionItem = {
@@ -65,7 +66,8 @@ function parseSteps(steps: string[] | string | undefined): string[] {
 }
 
 export function ActionPlanTab({ brands }: { brands: Brand[] }) {
-  const [selectedBrand, setSelectedBrand] = useState(brands[0]?.id ?? '')
+  const ctx = useBrandOptional()
+  const selectedBrand = ctx?.currentBrandId ?? brands[0]?.id ?? ''
   const [plan, setPlan] = useState<ActionPlan | null>(null)
   const [loading, setLoading] = useState(false)
   const [creditError, setCreditError] = useState(false)
@@ -76,6 +78,15 @@ export function ActionPlanTab({ brands }: { brands: Brand[] }) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const brand = brands.find((b) => b.id === selectedBrand)
+
+  // Reset state when brand changes via global switcher
+  useEffect(() => {
+    setPlan(null)
+    setError('')
+    setCreditError(false)
+    setExpandedItem(null)
+    setVerifyResults({})
+  }, [selectedBrand])
 
   async function generate() {
     if (!selectedBrand) return
@@ -156,29 +167,9 @@ export function ActionPlanTab({ brands }: { brands: Brand[] }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Brand selector — pills */}
-          <div className="flex gap-2 flex-wrap">
-            {brands.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => {
-                  setSelectedBrand(b.id)
-                  setPlan(null)
-                  setError('')
-                  setCreditError(false)
-                  setExpandedItem(null)
-                  setVerifyResults({})
-                }}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-                  selectedBrand === b.id
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-secondary text-muted-foreground border-border hover:border-primary/50'
-                }`}
-              >
-                {b.name}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Plan pour <span className="text-foreground font-medium">{brand?.name ?? '—'}</span>
+          </p>
 
           <div className="flex items-center gap-3 flex-wrap">
             <Button onClick={generate} disabled={loading || !selectedBrand}>
