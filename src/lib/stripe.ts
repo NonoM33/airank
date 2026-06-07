@@ -76,3 +76,26 @@ export const LIFETIME_TIERS = {
 export type LifetimeTierId = keyof typeof LIFETIME_TIERS
 
 export const TRIAL_DAYS = 14
+
+/**
+ * Resolve a subscription plan from a Stripe price id, covering BOTH monthly and
+ * yearly price ids. Returns null for unknown/empty prices (never guesses a plan).
+ * Empty env vars are ignored so an unset price id can't match an empty input.
+ */
+export function planFromPriceId(
+  priceId: string | null | undefined
+): 'STARTER' | 'PRO' | 'AGENCY' | null {
+  if (!priceId) return null
+  const entries: Array<[string | undefined, 'STARTER' | 'PRO' | 'AGENCY']> = [
+    [process.env.STRIPE_STARTER_PRICE_ID, 'STARTER'],
+    [process.env.STRIPE_STARTER_YEARLY_PRICE_ID, 'STARTER'],
+    [process.env.STRIPE_PRO_PRICE_ID, 'PRO'],
+    [process.env.STRIPE_PRO_YEARLY_PRICE_ID, 'PRO'],
+    [process.env.STRIPE_AGENCY_PRICE_ID, 'AGENCY'],
+    [process.env.STRIPE_AGENCY_YEARLY_PRICE_ID, 'AGENCY'],
+  ]
+  for (const [id, plan] of entries) {
+    if (id && id === priceId) return plan
+  }
+  return null
+}

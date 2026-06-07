@@ -1,6 +1,7 @@
-import { stripe } from '@/lib/stripe'
+import { stripe, LIFETIME_TIERS, planFromPriceId, type LifetimeTierId } from '@/lib/stripe'
 import { prisma } from '@/lib/db'
 import { PLAN_CREDITS } from '@/lib/credits'
+import { applyPlanUpgrade, grantLifetime } from '@/lib/billing'
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 
@@ -8,15 +9,11 @@ const PLAN_RANK: Record<'FREE' | 'STARTER' | 'PRO' | 'AGENCY', number> = {
   FREE: 0, STARTER: 1, PRO: 2, AGENCY: 3,
 }
 
+const VALID_PLANS = new Set(['STARTER', 'PRO', 'AGENCY'])
+
 // Disable body parsing - Stripe needs raw body for signature verification
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-const PRICE_TO_PLAN: Record<string, 'STARTER' | 'PRO' | 'AGENCY'> = {
-  [process.env.STRIPE_STARTER_PRICE_ID ?? '']: 'STARTER',
-  [process.env.STRIPE_PRO_PRICE_ID ?? '']: 'PRO',
-  [process.env.STRIPE_AGENCY_PRICE_ID ?? '']: 'AGENCY',
-}
 
 async function updateUserPlan(customerId: string, plan: 'FREE' | 'STARTER' | 'PRO' | 'AGENCY') {
   // Fetch current plan/credits so we can seed credits on upgrade without punishing on downgrade
@@ -70,30 +67,34 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return
   }
 
-  // Subscription checkout
-  const plan = (session.metadata?.plan as 'STARTER' | 'PRO' | 'AGENCY') ?? 'PRO'
+  // Lifetime deal (AppSumo, one-time payment) — idempotent per session id
+  if (session.metadata?.type === 'lifetime') {
+    const tier = session.metadata.tier as LifetimeTierId
+    if (!tier || !(tier in LIFETIME_TIERS)) {
+      console.error(`[Webhook] lifetime checkout with invalid tier: ${session.metadata.tier}`)
+      return
+    }
+    const { granted } = await grantLifetime({ userId, tier, sessionId: session.id, customerId })
+    console.log(`[Webhook] lifetime ${tier} for userId=${userId}: granted=${granted}`)
+    return
+  }
+
+  // Subscription checkout — never default to a plan; an unknown plan must not grant PRO
+  const plan = session.metadata?.plan
+  if (!plan || !VALID_PLANS.has(plan)) {
+    console.error(
+      `[Webhook] checkout.session.completed without a valid plan (got "${plan}") — ` +
+        `deferring to customer.subscription.updated for userId=${userId}`
+    )
+    // Still persist the Stripe customer link so the subscription event can resolve the user.
+    if (customerId) {
+      await prisma.user.update({ where: { id: userId }, data: { stripeId: customerId } })
+    }
+    return
+  }
 
   console.log(`[Webhook] checkout.session.completed: userId=${userId}, plan=${plan}, customer=${customerId}`)
-
-  // Seed credits on upgrade (keep existing if already higher)
-  const existing = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { plan: true, credits: true },
-  })
-  const isUpgrade =
-    existing && PLAN_RANK[plan] > PLAN_RANK[existing.plan as keyof typeof PLAN_RANK]
-  const nextCredits = isUpgrade
-    ? Math.max(existing!.credits, PLAN_CREDITS[plan])
-    : existing?.credits ?? PLAN_CREDITS[plan]
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      plan,
-      credits: nextCredits,
-      ...(customerId ? { stripeId: customerId } : {}),
-    },
-  })
+  await applyPlanUpgrade(userId, plan as 'STARTER' | 'PRO' | 'AGENCY', customerId)
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -101,7 +102,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   if (!customerId) return
 
   const priceId = subscription.items.data[0]?.price?.id ?? ''
-  const plan = PRICE_TO_PLAN[priceId] ?? 'FREE'
+  const plan = planFromPriceId(priceId) ?? 'FREE'
 
   console.log(`[Webhook] subscription.updated: customer=${customerId}, status=${subscription.status}, plan=${plan}`)
 
@@ -190,8 +191,10 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     console.error(`[Webhook] Handler error for ${event.type}:`, err)
-    // Return 200 anyway to prevent Stripe from retrying endlessly
-    return NextResponse.json({ received: true, error: 'handler_error' })
+    // Money-critical grants must not be silently dropped: return 5xx so Stripe
+    // retries the delivery (with backoff, up to ~3 days). Handlers are written
+    // to be idempotent so replays are safe.
+    return NextResponse.json({ error: 'handler_error' }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })
