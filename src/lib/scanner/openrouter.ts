@@ -19,7 +19,10 @@ export async function queryOpenRouter(
       model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: options?.maxTokens ?? 1024,
-      temperature: options?.temperature ?? 0.7,
+      // Deterministic by default: the same brand+query must return the same
+      // visibility verdict on every run, otherwise the score looks "random"
+      // and customers lose trust. Callers can still opt into creativity.
+      temperature: options?.temperature ?? 0,
     }),
   })
 

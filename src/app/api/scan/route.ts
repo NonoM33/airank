@@ -59,6 +59,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Marque introuvable' }, { status: 404 })
   }
 
+  // Cache: never charge twice for the same brand+query within 24h. Return the
+  // existing scan for free (results are deterministic, so this is also correct).
+  const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000
+  const cached = await prisma.scan.findFirst({
+    where: {
+      brandId,
+      query,
+      createdAt: { gte: new Date(Date.now() - CACHE_WINDOW_MS) },
+    },
+    orderBy: { createdAt: 'desc' },
+    include: { results: true },
+  })
+  if (cached) {
+    return NextResponse.json({ scan: cached, cached: true })
+  }
+
   // Check credits first but don't debit yet
   const currentCredits = await getCredits(session.user.id)
   if (currentCredits < CREDIT_COSTS.scan) {

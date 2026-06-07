@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { scanBrandFree } from '@/lib/scanner'
+import { buildDiscoveryQuery } from '@/lib/scanner/discovery'
 import { calculateGlobalScore, calculateLLMScore } from '@/lib/analysis'
 
 const freeScanSchema = z.object({
@@ -52,7 +53,9 @@ export async function POST(req: Request) {
     }
   }
 
-  const query = `Quelles sont les meilleures options ou alternatives dans le même secteur que ${brand} ?`
+  // Neutral, brand-agnostic discovery query (does NOT name the brand) so a
+  // "mention" reflects real spontaneous visibility, not prompt leakage.
+  const query = await buildDiscoveryQuery(brand)
   const results = await scanBrandFree(brand, query)
 
   const globalScore = calculateGlobalScore(results)
