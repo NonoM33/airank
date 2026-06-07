@@ -2,7 +2,10 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-RUN npm install -g pnpm@latest
+# Pin pnpm to the version that generated pnpm-lock.yaml (lockfileVersion 9.0).
+# `pnpm@latest` is a time-bomb: newer pnpm releases dropped Node 20 support and
+# crash the build with ERR_UNKNOWN_BUILTIN_MODULE on this base image.
+RUN npm install -g pnpm@10.2.1
 
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
@@ -11,7 +14,7 @@ RUN pnpm install --frozen-lockfile
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@10.2.1
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
